@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Movie, Genre
-from .serializers import MovieListSerializer, MovieDetailSerializer, GenreSerializer
+from .models import Movie, Genre, Showtime
+from .serializers import MovieListSerializer, MovieDetailSerializer, GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer
 
 
 class GenreListView(generics.ListAPIView):
@@ -226,6 +226,132 @@ class MovieDetailView(generics.RetrieveAPIView):
             )
         },
         tags=['Movies']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class ShowtimeListView(generics.ListAPIView):
+    """
+    API endpoint to retrieve a list of available showtimes.
+    
+    Supports filtering by movie, date, theater, and availability.
+    Returns only active showtimes for active movies.
+    """
+    queryset = Showtime.objects.filter(is_active=True, movie__is_active=True)
+    serializer_class = ShowtimeSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['movie', 'theater_name', 'screen_number']
+    ordering_fields = ['datetime', 'ticket_price', 'available_seats']
+    ordering = ['datetime']
+    
+    @swagger_auto_schema(
+        operation_summary="List available showtimes",
+        operation_description="""
+        Retrieve a paginated list of available showtimes for booking.
+        
+        **Features:**
+        - **Filtering:** Filter by movie, date, theater, and screen
+        - **Ordering:** Sort by datetime, price, or available seats
+        - **Availability:** Only shows active showtimes with available seats
+        - **Pagination:** Results are paginated (20 per page)
+        
+        **Query Parameters:**
+        - `movie`: Filter by movie ID
+        - `datetime__date`: Filter by specific date (YYYY-MM-DD)
+        - `theater_name`: Filter by theater name
+        - `screen_number`: Filter by screen number
+        - `ordering`: Sort results (`datetime`, `-datetime`, `ticket_price`, `-ticket_price`, `available_seats`, `-available_seats`)
+        - `page`: Page number for pagination
+        
+        **Examples:**
+        - `/api/v1/showtimes/?movie=123` - All showtimes for a specific movie
+        - `/api/v1/showtimes/?datetime__date=2024-12-25` - All showtimes on Christmas
+        - `/api/v1/showtimes/?theater_name=Main Theater&screen_number=1` - Specific theater and screen
+        - `/api/v1/showtimes/?ordering=ticket_price` - Sort by lowest price first
+        """,
+        tags=['Showtimes']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class ShowtimeDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint to retrieve detailed information about a specific showtime.
+    
+    Returns comprehensive showtime details including complete movie information.
+    """
+    queryset = Showtime.objects.filter(is_active=True, movie__is_active=True)
+    serializer_class = ShowtimeDetailSerializer
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        operation_summary="Get showtime details",
+        operation_description="""
+        Retrieve detailed information about a specific showtime by its ID.
+        
+        **Use Cases:**
+        - Display full showtime information before booking
+        - Show movie and theater details together
+        - Access pricing and availability information
+        
+        **Response:**
+        Returns complete showtime details including full movie information,
+        theater details, pricing, and availability status.
+        """,
+        tags=['Showtimes']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class MovieShowtimesView(generics.ListAPIView):
+    """
+    API endpoint to retrieve all showtimes for a specific movie.
+    
+    Returns available showtimes for a given movie, ordered by datetime.
+    """
+    serializer_class = ShowtimeSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
+    filterset_fields = ['theater_name', 'screen_number']
+    ordering_fields = ['datetime', 'ticket_price', 'available_seats']
+    ordering = ['datetime']
+    
+    def get_queryset(self):
+        movie_id = self.kwargs['movie_id']
+        return Showtime.objects.filter(
+            movie_id=movie_id,
+            is_active=True,
+            movie__is_active=True
+        )
+    
+    @swagger_auto_schema(
+        operation_summary="List showtimes for a specific movie",
+        operation_description="""
+        Retrieve all available showtimes for a specific movie.
+        
+        **Features:**
+        - **Filtering:** Filter by date, theater, and screen
+        - **Ordering:** Sort by datetime, price, or available seats
+        - **Movie-specific:** Only shows showtimes for the specified movie
+        - **Pagination:** Results are paginated (20 per page)
+        
+        **Query Parameters:**
+        - `datetime__date`: Filter by specific date (YYYY-MM-DD)
+        - `theater_name`: Filter by theater name
+        - `screen_number`: Filter by screen number
+        - `ordering`: Sort results (`datetime`, `-datetime`, `ticket_price`, `-ticket_price`, `available_seats`, `-available_seats`)
+        - `page`: Page number for pagination
+        
+        **Examples:**
+        - `/api/v1/movies/123/showtimes/` - All showtimes for movie 123
+        - `/api/v1/movies/123/showtimes/?datetime__date=2024-12-25` - Movie showtimes on Christmas
+        - `/api/v1/movies/123/showtimes/?ordering=ticket_price` - Sort by price
+        """,
+        tags=['Movies', 'Showtimes']
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)

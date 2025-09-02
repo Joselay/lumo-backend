@@ -1,8 +1,8 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime
 from decimal import Decimal
-from movies.models import Movie, Genre
+from movies.models import Movie, Genre, Showtime
 
 
 class Command(BaseCommand):
@@ -18,6 +18,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if options['clear']:
             self.stdout.write('Clearing existing data...')
+            Showtime.objects.all().delete()
             Movie.objects.all().delete()
             Genre.objects.all().delete()
 
@@ -158,8 +159,52 @@ class Command(BaseCommand):
             else:
                 self.stdout.write(f'Movie already exists: {movie.title}')
 
+        # Create sample showtimes for movies
+        self.stdout.write('Creating sample showtimes...')
+        theaters = ['Main Theater', 'IMAX Theater', 'Premium Theater']
+        base_prices = {'Main Theater': Decimal('12.50'), 'IMAX Theater': Decimal('18.00'), 'Premium Theater': Decimal('15.00')}
+        
+        movies = Movie.objects.all()
+        showtimes_created = 0
+        
+        for movie in movies:
+            # Create showtimes for the next 7 days
+            for day_offset in range(7):
+                show_date = date.today() + timedelta(days=day_offset)
+                
+                # Create 3-4 showtimes per day for each movie
+                show_times = ['14:00', '17:30', '20:00', '22:30']
+                
+                for i, show_time in enumerate(show_times):
+                    theater = theaters[i % len(theaters)]
+                    screen_number = (i % 3) + 1
+                    
+                    # Create datetime object
+                    show_datetime = timezone.make_aware(
+                        datetime.combine(show_date, datetime.strptime(show_time, '%H:%M').time())
+                    )
+                    
+                    showtime, created = Showtime.objects.get_or_create(
+                        theater_name=theater,
+                        screen_number=screen_number,
+                        datetime=show_datetime,
+                        defaults={
+                            'movie': movie,
+                            'total_seats': 100 if theater != 'IMAX Theater' else 150,
+                            'available_seats': 75 if theater != 'IMAX Theater' else 120,
+                            'ticket_price': base_prices[theater],
+                            'is_active': True
+                        }
+                    )
+                    
+                    if created:
+                        showtimes_created += 1
+                    
+                    if showtimes_created % 20 == 0:
+                        self.stdout.write(f'Created {showtimes_created} showtimes...')
+
         self.stdout.write(
             self.style.SUCCESS(
-                f'Successfully populated database with {Genre.objects.count()} genres and {Movie.objects.count()} movies'
+                f'Successfully populated database with {Genre.objects.count()} genres, {Movie.objects.count()} movies, and {Showtime.objects.count()} showtimes'
             )
         )

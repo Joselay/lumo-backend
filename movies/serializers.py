@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from drf_yasg.utils import swagger_serializer_method
 from drf_yasg import openapi
-from .models import Movie, Genre
+from .models import Movie, Genre, Showtime
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -63,6 +63,87 @@ class MovieListSerializer(serializers.ModelSerializer):
         return data
 
 
+class ShowtimeSerializer(serializers.ModelSerializer):
+    """
+    Serializer for movie showtimes.
+    
+    Provides showtime information including movie details, scheduling,
+    theater information, and availability status.
+    """
+    
+    movie_title = serializers.CharField(source='movie.title', read_only=True, help_text="Title of the movie")
+    movie_duration = serializers.IntegerField(source='movie.duration', read_only=True, help_text="Movie duration in minutes")
+    movie_poster = serializers.URLField(source='movie.poster_image', read_only=True, help_text="Movie poster image URL")
+    is_available = serializers.ReadOnlyField(help_text="Whether the showtime is available for booking")
+    seats_sold = serializers.ReadOnlyField(help_text="Number of seats already sold")
+    ticket_price = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Ticket price in dollars"
+    )
+    
+    class Meta:
+        model = Showtime
+        fields = [
+            'id', 'movie', 'movie_title', 'movie_duration', 'movie_poster',
+            'datetime', 'theater_name', 'screen_number', 'total_seats', 
+            'available_seats', 'seats_sold', 'ticket_price', 'is_available'
+        ]
+        
+    def to_representation(self, instance):
+        """
+        Customize the output representation.
+        """
+        data = super().to_representation(instance)
+        # Format the datetime for better readability
+        if data['datetime']:
+            from datetime import datetime
+            dt = datetime.fromisoformat(data['datetime'].replace('Z', '+00:00'))
+            data['date'] = dt.strftime('%Y-%m-%d')
+            data['time'] = dt.strftime('%H:%M')
+            data['datetime_formatted'] = dt.strftime('%B %d, %Y at %I:%M %p')
+        return data
+
+
+class ShowtimeDetailSerializer(serializers.ModelSerializer):
+    """
+    Detailed serializer for individual showtime views.
+    
+    Includes complete movie information along with showtime details.
+    """
+    
+    movie = MovieListSerializer(read_only=True)
+    is_available = serializers.ReadOnlyField(help_text="Whether the showtime is available for booking")
+    seats_sold = serializers.ReadOnlyField(help_text="Number of seats already sold")
+    ticket_price = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Ticket price in dollars"
+    )
+    
+    class Meta:
+        model = Showtime
+        fields = [
+            'id', 'movie', 'datetime', 'theater_name', 'screen_number',
+            'total_seats', 'available_seats', 'seats_sold', 'ticket_price',
+            'is_available', 'created_at', 'updated_at'
+        ]
+        
+    def to_representation(self, instance):
+        """
+        Customize the output representation.
+        """
+        data = super().to_representation(instance)
+        # Format the datetime for better readability
+        if data['datetime']:
+            from datetime import datetime
+            dt = datetime.fromisoformat(data['datetime'].replace('Z', '+00:00'))
+            data['date'] = dt.strftime('%Y-%m-%d')
+            data['time'] = dt.strftime('%H:%M')
+            data['datetime_formatted'] = dt.strftime('%B %d, %Y at %I:%M %p')
+        return data
+
+
 class MovieDetailSerializer(serializers.ModelSerializer):
     """
     Serializer for detailed movie view.
@@ -107,4 +188,85 @@ class MovieDetailSerializer(serializers.ModelSerializer):
         if data['duration']:
             hours, minutes = divmod(data['duration'], 60)
             data['duration_formatted'] = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
+        return data
+
+
+class ShowtimeSerializer(serializers.ModelSerializer):
+    """
+    Serializer for movie showtimes.
+    
+    Provides showtime information including movie details, scheduling,
+    theater information, and availability status.
+    """
+    
+    movie_title = serializers.CharField(source='movie.title', read_only=True, help_text="Title of the movie")
+    movie_duration = serializers.IntegerField(source='movie.duration', read_only=True, help_text="Movie duration in minutes")
+    movie_poster = serializers.URLField(source='movie.poster_image', read_only=True, help_text="Movie poster image URL")
+    is_available = serializers.ReadOnlyField(help_text="Whether the showtime is available for booking")
+    seats_sold = serializers.ReadOnlyField(help_text="Number of seats already sold")
+    ticket_price = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Ticket price in dollars"
+    )
+    
+    class Meta:
+        model = Showtime
+        fields = [
+            'id', 'movie', 'movie_title', 'movie_duration', 'movie_poster',
+            'datetime', 'theater_name', 'screen_number', 'total_seats', 
+            'available_seats', 'seats_sold', 'ticket_price', 'is_available'
+        ]
+        
+    def to_representation(self, instance):
+        """
+        Customize the output representation.
+        """
+        data = super().to_representation(instance)
+        # Format the datetime for better readability
+        if data['datetime']:
+            from datetime import datetime
+            dt = datetime.fromisoformat(data['datetime'].replace('Z', '+00:00'))
+            data['date'] = dt.strftime('%Y-%m-%d')
+            data['time'] = dt.strftime('%H:%M')
+            data['datetime_formatted'] = dt.strftime('%B %d, %Y at %I:%M %p')
+        return data
+
+
+class ShowtimeDetailSerializer(serializers.ModelSerializer):
+    """
+    Detailed serializer for individual showtime views.
+    
+    Includes complete movie information along with showtime details.
+    """
+    
+    movie = MovieListSerializer(read_only=True)
+    is_available = serializers.ReadOnlyField(help_text="Whether the showtime is available for booking")
+    seats_sold = serializers.ReadOnlyField(help_text="Number of seats already sold")
+    ticket_price = serializers.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        help_text="Ticket price in dollars"
+    )
+    
+    class Meta:
+        model = Showtime
+        fields = [
+            'id', 'movie', 'datetime', 'theater_name', 'screen_number',
+            'total_seats', 'available_seats', 'seats_sold', 'ticket_price',
+            'is_available', 'created_at', 'updated_at'
+        ]
+        
+    def to_representation(self, instance):
+        """
+        Customize the output representation.
+        """
+        data = super().to_representation(instance)
+        # Format the datetime for better readability
+        if data['datetime']:
+            from datetime import datetime
+            dt = datetime.fromisoformat(data['datetime'].replace('Z', '+00:00'))
+            data['date'] = dt.strftime('%Y-%m-%d')
+            data['time'] = dt.strftime('%H:%M')
+            data['datetime_formatted'] = dt.strftime('%B %d, %Y at %I:%M %p')
         return data
