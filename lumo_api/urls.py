@@ -24,63 +24,6 @@ schema_view = get_schema_view(
     openapi.Info(
         title="Lumo Cinema API",
         default_version='v1',
-        description="""
-        # Lumo Cinema Ticket Booking System API
-        
-        Welcome to the **Lumo Cinema API** - a comprehensive REST API for managing cinema operations, movie listings, and ticket bookings.
-        
-        ## Features
-        
-        ### 🎬 Movies
-        - **Movie Listings**: Browse active movies with filtering and search
-        - **Movie Details**: Get comprehensive movie information
-        - **Genre Management**: Organize movies by genres
-        
-        ### 🔍 Search & Filter
-        - **Smart Search**: Search movies by title and description
-        - **Genre Filtering**: Filter movies by single or multiple genres
-        - **Date Filtering**: Find movies by release date
-        - **Sorting**: Sort by release date, rating, or title
-        
-        ### 📄 Pagination
-        - All list endpoints support pagination (20 items per page)
-        - Navigation links provided for easy browsing
-        
-        ## Getting Started
-        
-        1. **Browse Movies**: Start with `/api/v1/movies/` to get active movies
-        2. **Filter by Genre**: Use `/api/v1/movies/?genres=1` to filter by genre
-        3. **Search**: Use `/api/v1/movies/?search=action` to search movies
-        4. **Get Details**: Use `/api/v1/movies/{id}/` for specific movie details
-        
-        ## Base URL
-        - **Development**: `http://localhost:8000`
-        - **Production**: TBD
-        
-        ## Response Format
-        All responses are in JSON format with consistent structure:
-        - **Success**: Returns requested data with HTTP 200
-        - **Error**: Returns error details with appropriate HTTP status codes
-        - **Pagination**: List endpoints include `count`, `next`, `previous`, and `results`
-        
-        ## Rate Limiting
-        Currently no rate limiting is applied (development mode).
-        
-        ---
-        
-        **Version**: 1.0.0  
-        **Last Updated**: September 2025
-        """,
-        terms_of_service="https://www.lumocinema.com/terms/",
-        contact=openapi.Contact(
-            name="Lumo Cinema API Support",
-            email="api-support@lumocinema.com",
-            url="https://www.lumocinema.com/support"
-        ),
-        license=openapi.License(
-            name="MIT License",
-            url="https://opensource.org/licenses/MIT"
-        ),
     ),
     public=True,
     permission_classes=(permissions.AllowAny,),
