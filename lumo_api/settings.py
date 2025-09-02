@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'drf_yasg',
+    'django_filters',
     'movies',
 ]
 
@@ -162,8 +163,20 @@ SWAGGER_SETTINGS = {
     ],
     'OPERATIONS_SORTER': 'alpha',
     'TAGS_SORTER': 'alpha',
-    'DOC_EXPANSION': 'none',
+    'DOC_EXPANSION': 'list',
     'DEEP_LINKING': True,
     'SHOW_EXTENSIONS': True,
     'SHOW_COMMON_EXTENSIONS': True,
+    'DEFAULT_MODEL_RENDERING': 'example',
+    'DEFAULT_MODEL_DEPTH': 3,
+    'REFETCH_SCHEMA_WITH_AUTH': True,
+    'REFETCH_SCHEMA_ON_LOGOUT': True,
+}
+
+# Redoc settings  
+REDOC_SETTINGS = {
+    'LAZY_RENDERING': False,
+    'HIDE_HOSTNAME': False,
+    'EXPAND_RESPONSES': ['200', '201'],
+    'PATH_IN_MIDDLE': True,
 }
