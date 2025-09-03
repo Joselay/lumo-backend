@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Movie, Genre, Showtime
-from .serializers import MovieListSerializer, MovieDetailSerializer, GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer
+from .models import Movie, Genre, Showtime, Theater
+from .serializers import MovieListSerializer, MovieDetailSerializer, GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer, TheaterSerializer, TheaterDetailSerializer
 
 
 class GenreListView(generics.ListAPIView):
@@ -242,7 +242,7 @@ class ShowtimeListView(generics.ListAPIView):
     serializer_class = ShowtimeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['movie', 'theater_name', 'screen_number']
+    filterset_fields = ['movie', 'theater', 'screen_number']
     ordering_fields = ['datetime', 'ticket_price', 'available_seats']
     ordering = ['datetime']
     
@@ -316,7 +316,7 @@ class MovieShowtimesView(generics.ListAPIView):
     serializer_class = ShowtimeSerializer
     permission_classes = [AllowAny]
     filter_backends = [DjangoFilterBackend, filters.OrderingFilter]
-    filterset_fields = ['theater_name', 'screen_number']
+    filterset_fields = ['theater', 'screen_number']
     ordering_fields = ['datetime', 'ticket_price', 'available_seats']
     ordering = ['datetime']
     
@@ -352,6 +352,181 @@ class MovieShowtimesView(generics.ListAPIView):
         - `/api/v1/movies/123/showtimes/?ordering=ticket_price` - Sort by price
         """,
         tags=['Movies', 'Showtimes']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class TheaterListView(generics.ListAPIView):
+    """
+    API endpoint to retrieve a list of theaters.
+    
+    Returns all active theaters with location and amenity information.
+    """
+    queryset = Theater.objects.filter(is_active=True)
+    serializer_class = TheaterSerializer
+    permission_classes = [AllowAny]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ['city', 'state', 'parking_available']
+    search_fields = ['name', 'city', 'address']
+    ordering_fields = ['name', 'city', 'total_screens']
+    ordering = ['name']
+    
+    @swagger_auto_schema(
+        operation_summary="List theaters",
+        operation_description="""
+        Retrieve a paginated list of active theater locations.
+        
+        **Features:**
+        - **Filtering:** Filter by city, state, and parking availability
+        - **Search:** Search in theater name, city, and address
+        - **Ordering:** Sort by name, city, or number of screens
+        - **Pagination:** Results are paginated (20 per page)
+        
+        **Query Parameters:**
+        - `city`: Filter by city name
+        - `state`: Filter by state
+        - `parking_available`: Filter by parking availability (true/false)
+        - `search`: Search in name, city, and address
+        - `ordering`: Sort results (`name`, `-name`, `city`, `-city`, `total_screens`, `-total_screens`)
+        - `page`: Page number for pagination
+        
+        **Examples:**
+        - `/api/v1/theaters/?city=Los Angeles` - Theaters in Los Angeles
+        - `/api/v1/theaters/?parking_available=true` - Theaters with parking
+        - `/api/v1/theaters/?search=cinemark` - Search for Cinemark theaters
+        - `/api/v1/theaters/?ordering=-total_screens` - Sort by most screens first
+        """,
+        manual_parameters=[
+            openapi.Parameter(
+                'city',
+                openapi.IN_QUERY,
+                description="Filter by city name",
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'state',
+                openapi.IN_QUERY,
+                description="Filter by state",
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'parking_available',
+                openapi.IN_QUERY,
+                description="Filter by parking availability",
+                type=openapi.TYPE_BOOLEAN
+            ),
+            openapi.Parameter(
+                'search',
+                openapi.IN_QUERY,
+                description="Search in theater name, city, and address",
+                type=openapi.TYPE_STRING
+            ),
+            openapi.Parameter(
+                'ordering',
+                openapi.IN_QUERY,
+                description="Order results by field",
+                type=openapi.TYPE_STRING,
+                enum=['name', '-name', 'city', '-city', 'total_screens', '-total_screens']
+            )
+        ],
+        responses={
+            200: openapi.Response(
+                description="Theaters retrieved successfully",
+                schema=TheaterSerializer(many=True),
+                examples={
+                    "application/json": {
+                        "count": 15,
+                        "next": None,
+                        "previous": None,
+                        "results": [
+                            {
+                                "id": "uuid-here",
+                                "name": "Lumo Cinema Downtown",
+                                "address": "123 Main Street",
+                                "city": "Los Angeles",
+                                "state": "CA",
+                                "zip_code": "90210",
+                                "full_address": "123 Main Street, Los Angeles, CA 90210",
+                                "phone_number": "+1-555-0123",
+                                "email": "downtown@lumocinema.com",
+                                "total_screens": 8,
+                                "parking_available": True,
+                                "accessibility_features": "Wheelchair accessible, Audio description available",
+                                "amenities": "IMAX, Dolby Atmos, Concession stand, Bar",
+                                "is_active": True
+                            }
+                        ]
+                    }
+                }
+            )
+        },
+        tags=['Theaters']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class TheaterDetailView(generics.RetrieveAPIView):
+    """
+    API endpoint to retrieve detailed information about a specific theater.
+    
+    Returns comprehensive theater details including active showtimes count.
+    """
+    queryset = Theater.objects.filter(is_active=True)
+    serializer_class = TheaterDetailSerializer
+    permission_classes = [AllowAny]
+    
+    @swagger_auto_schema(
+        operation_summary="Get theater details",
+        operation_description="""
+        Retrieve detailed information about a specific theater by its ID.
+        
+        **Use Cases:**
+        - Display full theater information on theater detail pages
+        - Show theater details when booking tickets
+        - Access theater amenities and accessibility information
+        
+        **Response:**
+        Returns complete theater details including location, amenities,
+        accessibility features, and current active showtimes count.
+        """,
+        responses={
+            200: openapi.Response(
+                description="Theater details retrieved successfully",
+                schema=TheaterDetailSerializer(),
+                examples={
+                    "application/json": {
+                        "id": "uuid-here",
+                        "name": "Lumo Cinema Downtown",
+                        "address": "123 Main Street",
+                        "city": "Los Angeles",
+                        "state": "CA",
+                        "zip_code": "90210",
+                        "full_address": "123 Main Street, Los Angeles, CA 90210",
+                        "phone_number": "+1-555-0123",
+                        "email": "downtown@lumocinema.com",
+                        "total_screens": 8,
+                        "parking_available": True,
+                        "accessibility_features": "Wheelchair accessible, Audio description available",
+                        "amenities": "IMAX, Dolby Atmos, Concession stand, Bar",
+                        "is_active": True,
+                        "active_showtimes_count": 42,
+                        "created_at": "2024-01-01T00:00:00Z",
+                        "updated_at": "2024-01-15T10:30:00Z"
+                    }
+                }
+            ),
+            404: openapi.Response(
+                description="Theater not found",
+                examples={
+                    "application/json": {
+                        "detail": "Not found."
+                    }
+                }
+            )
+        },
+        tags=['Theaters']
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)

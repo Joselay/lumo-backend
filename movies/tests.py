@@ -7,10 +7,11 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.core.exceptions import ValidationError
-from .models import Movie, Genre, Showtime
+from .models import Movie, Genre, Showtime, Theater
 from .serializers import (
     MovieListSerializer, MovieDetailSerializer, 
-    GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer
+    GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer,
+    TheaterSerializer, TheaterDetailSerializer
 )
 
 
@@ -139,12 +140,21 @@ class ShowtimeModelTest(TestCase):
             release_date=date.today()
         )
         
+        self.theater = Theater.objects.create(
+            name="Showtime Model Test Theater",
+            address="123 Main Street",
+            city="Los Angeles",
+            state="CA",
+            zip_code="90210",
+            phone_number="+1-555-0123"
+        )
+        
         # Create a showtime in the future
         future_time = timezone.now() + timedelta(days=1)
         self.showtime = Showtime.objects.create(
             movie=self.movie,
+            theater=self.theater,
             datetime=future_time,
-            theater_name="Main Theater",
             screen_number=1,
             total_seats=100,
             available_seats=80,
@@ -155,7 +165,7 @@ class ShowtimeModelTest(TestCase):
     def test_showtime_creation(self):
         """Test basic showtime creation."""
         self.assertEqual(self.showtime.movie, self.movie)
-        self.assertEqual(self.showtime.theater_name, "Main Theater")
+        self.assertEqual(self.showtime.theater.name, "Showtime Model Test Theater")
         self.assertEqual(self.showtime.screen_number, 1)
         self.assertEqual(self.showtime.total_seats, 100)
         self.assertEqual(self.showtime.available_seats, 80)
@@ -164,7 +174,7 @@ class ShowtimeModelTest(TestCase):
     
     def test_showtime_str_method(self):
         """Test the string representation of Showtime."""
-        expected = f"Test Movie - {self.showtime.datetime.strftime('%Y-%m-%d %H:%M')} - Main Theater Screen 1"
+        expected = f"Test Movie - {self.showtime.datetime.strftime('%Y-%m-%d %H:%M')} - Showtime Model Test Theater Screen 1"
         self.assertEqual(str(self.showtime), expected)
     
     def test_is_available_property(self):
@@ -199,7 +209,7 @@ class ShowtimeModelTest(TestCase):
             Showtime.objects.create(
                 movie=self.movie,
                 datetime=self.showtime.datetime,
-                theater_name="Main Theater",
+                theater=self.theater,
                 screen_number=1,  # Same theater, screen, and time
                 total_seats=50,
                 available_seats=50,
@@ -299,10 +309,19 @@ class ShowtimeSerializerTest(TestCase):
             poster_image="https://example.com/poster.jpg"
         )
         
+        self.theater2 = Theater.objects.create(
+            name="Grand Theater",
+            address="456 Grand Avenue",
+            city="New York",
+            state="NY",
+            zip_code="10001",
+            phone_number="+1-555-0456"
+        )
+        
         self.showtime = Showtime.objects.create(
             movie=self.movie,
             datetime=datetime(2024, 12, 25, 19, 30, tzinfo=timezone.utc),
-            theater_name="Grand Theater",
+            theater=self.theater2,
             screen_number=2,
             total_seats=150,
             available_seats=120,
@@ -482,12 +501,30 @@ class ShowtimeAPITest(APITestCase):
             is_active=True
         )
         
+        self.theater = Theater.objects.create(
+            name="API Test Main Theater",
+            address="123 Main Street",
+            city="Los Angeles",
+            state="CA",
+            zip_code="90210",
+            phone_number="+1-555-0123"
+        )
+        
+        self.theater3 = Theater.objects.create(
+            name="Side Theater",
+            address="789 Side Street",
+            city="Los Angeles",
+            state="CA",
+            zip_code="90211",
+            phone_number="+1-555-0789"
+        )
+        
         # Create future showtimes
         future_time = timezone.now() + timedelta(days=1)
         self.showtime = Showtime.objects.create(
             movie=self.movie,
             datetime=future_time,
-            theater_name="Main Theater",
+            theater=self.theater,
             screen_number=1,
             total_seats=100,
             available_seats=80,
@@ -499,7 +536,7 @@ class ShowtimeAPITest(APITestCase):
         self.inactive_showtime = Showtime.objects.create(
             movie=self.movie,
             datetime=future_time + timedelta(hours=2),
-            theater_name="Side Theater",
+            theater=self.theater3,
             screen_number=2,
             total_seats=50,
             available_seats=50,
@@ -518,7 +555,7 @@ class ShowtimeAPITest(APITestCase):
         # Should only return active showtimes for active movies
         results = response.data['results']
         self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]['theater_name'], 'Main Theater')
+        self.assertEqual(results[0]['theater_name'], 'API Test Main Theater')
     
     def test_showtime_detail_endpoint(self):
         """Test the showtime detail API endpoint."""
@@ -526,7 +563,7 @@ class ShowtimeAPITest(APITestCase):
         response = self.client.get(url)
         
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['theater_name'], 'Main Theater')
+        self.assertEqual(response.data['theater']['name'], 'API Test Main Theater')
         self.assertIn('movie', response.data)  # Should include full movie details
     
     def test_movie_showtimes_endpoint(self):
@@ -549,6 +586,165 @@ class ShowtimeAPITest(APITestCase):
         self.assertEqual(len(response.data['results']), 1)
         
         # Filter by theater
-        response = self.client.get(url, {'theater_name': 'Main Theater'})
+        response = self.client.get(url, {'theater': self.theater.id})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 1)
+
+
+class TheaterModelTest(TestCase):
+    """Test cases for the Theater model."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Test Theater",
+            address="123 Test Street",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0123",
+            total_screens=5,
+            parking_available=True,
+            accessibility_features="Wheelchair accessible",
+            amenities="IMAX, Dolby Atmos"
+        )
+    
+    def test_theater_creation(self):
+        """Test basic theater creation."""
+        self.assertEqual(self.theater.name, "Test Theater")
+        self.assertEqual(self.theater.city, "Test City")
+        self.assertEqual(self.theater.state, "TS")
+        self.assertEqual(self.theater.total_screens, 5)
+        self.assertTrue(self.theater.parking_available)
+        self.assertTrue(self.theater.is_active)
+    
+    def test_theater_str_method(self):
+        """Test the string representation of Theater."""
+        expected = "Test Theater - Test City, TS"
+        self.assertEqual(str(self.theater), expected)
+    
+    def test_full_address_property(self):
+        """Test the full_address property."""
+        expected = "123 Test Street, Test City, TS 12345"
+        self.assertEqual(self.theater.full_address, expected)
+
+
+class TheaterSerializerTest(TestCase):
+    """Test cases for Theater serializers."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Grand Cinema",
+            address="456 Grand Avenue",
+            city="New York",
+            state="NY",
+            zip_code="10001",
+            phone_number="+1-555-0456",
+            email="info@grandcinema.com",
+            total_screens=12,
+            parking_available=True,
+            accessibility_features="Full wheelchair access, audio descriptions",
+            amenities="IMAX, 4DX, Premium seating, Bar & restaurant"
+        )
+    
+    def test_theater_serialization(self):
+        """Test TheaterSerializer output."""
+        serializer = TheaterSerializer(self.theater)
+        data = serializer.data
+        
+        self.assertEqual(data['name'], 'Grand Cinema')
+        self.assertEqual(data['city'], 'New York')
+        self.assertEqual(data['state'], 'NY')
+        self.assertEqual(data['total_screens'], 12)
+        self.assertEqual(data['full_address'], '456 Grand Avenue, New York, NY 10001')
+        self.assertTrue(data['parking_available'])
+        self.assertEqual(data['amenities'], 'IMAX, 4DX, Premium seating, Bar & restaurant')
+    
+    def test_theater_detail_serialization(self):
+        """Test TheaterDetailSerializer output."""
+        serializer = TheaterDetailSerializer(self.theater)
+        data = serializer.data
+        
+        self.assertEqual(data['name'], 'Grand Cinema')
+        self.assertIn('created_at', data)
+        self.assertIn('updated_at', data)
+        self.assertIn('active_showtimes_count', data)
+        self.assertEqual(data['active_showtimes_count'], 0)  # No showtimes yet
+
+
+class TheaterAPITest(APITestCase):
+    """Test cases for Theater API endpoints."""
+    
+    def setUp(self):
+        self.client = APIClient()
+        
+        self.theater1 = Theater.objects.create(
+            name="Downtown Cinema",
+            address="123 Main Street",
+            city="Los Angeles",
+            state="CA",
+            zip_code="90210",
+            phone_number="+1-555-0123",
+            total_screens=8,
+            parking_available=True
+        )
+        
+        self.theater2 = Theater.objects.create(
+            name="Uptown Theater",
+            address="789 Broadway",
+            city="New York",
+            state="NY",
+            zip_code="10001",
+            phone_number="+1-555-0789",
+            total_screens=6,
+            parking_available=False
+        )
+    
+    def test_theater_list_endpoint(self):
+        """Test the theater list API endpoint."""
+        url = reverse('movies:theater-list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('results', response.data)
+        
+        results = response.data['results']
+        self.assertEqual(len(results), 3)  # Includes the default "Main Theater" from migration
+        
+        # Should be ordered by name - Main Theater comes first alphabetically
+        theater_names = [result['name'] for result in results]
+        self.assertIn('Downtown Cinema', theater_names)
+        self.assertIn('Uptown Theater', theater_names)
+        self.assertIn('Main Theater', theater_names)  # From migration
+    
+    def test_theater_detail_endpoint(self):
+        """Test the theater detail API endpoint."""
+        url = reverse('movies:theater-detail', kwargs={'pk': str(self.theater1.id)})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['name'], 'Downtown Cinema')
+        self.assertEqual(response.data['city'], 'Los Angeles')
+        self.assertIn('created_at', response.data)
+    
+    def test_theater_filtering(self):
+        """Test filtering theaters by various parameters."""
+        url = reverse('movies:theater-list')
+        
+        # Filter by city
+        response = self.client.get(url, {'city': 'Los Angeles'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)  # Main Theater + Downtown Cinema
+        result_names = [result['name'] for result in response.data['results']]
+        self.assertIn('Downtown Cinema', result_names)
+        
+        # Filter by parking availability
+        response = self.client.get(url, {'parking_available': 'true'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data['results']), 2)  # Main Theater + Downtown Cinema both have parking
+        result_names = [result['name'] for result in response.data['results']]
+        self.assertIn('Downtown Cinema', result_names)
+        
+        # Search by name
+        response = self.client.get(url, {'search': 'Downtown'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)

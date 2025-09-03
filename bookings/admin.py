@@ -10,7 +10,7 @@ class BookingAdmin(admin.ModelAdmin):
         'booking_reference', 'customer_name', 'movie_title', 'showtime_info',
         'number_of_seats', 'total_amount', 'status_badge', 'created_at'
     )
-    list_filter = ('status', 'created_at', 'showtime__movie__title', 'showtime__theater_name')
+    list_filter = ('status', 'created_at', 'showtime__movie__title', 'showtime__theater__name')
     search_fields = (
         'booking_reference', 'customer__user__username', 'customer__user__email',
         'showtime__movie__title', 'customer__user__first_name', 'customer__user__last_name'
@@ -41,7 +41,7 @@ class BookingAdmin(admin.ModelAdmin):
     
     def get_queryset(self, request):
         return super().get_queryset(request).select_related(
-            'customer__user', 'showtime__movie'
+            'customer__user', 'showtime__movie', 'showtime__theater'
         )
     
     def customer_name(self, obj):
@@ -56,7 +56,7 @@ class BookingAdmin(admin.ModelAdmin):
     
     def showtime_info(self, obj):
         """Display formatted showtime information."""
-        return f"{obj.showtime.datetime.strftime('%Y-%m-%d %H:%M')} - {obj.showtime.theater_name}"
+        return f"{obj.showtime.datetime.strftime('%Y-%m-%d %H:%M')} - {obj.showtime.theater.name}"
     showtime_info.short_description = 'Showtime'
     
     def status_badge(self, obj):
