@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.utils import timezone
 from .models import Booking, Payment
 from movies.serializers import ShowtimeSerializer
+from movies.models import SeatReservation
 from accounts.serializers import CustomerSerializer
 
 
@@ -10,13 +11,19 @@ class BookingCreateSerializer(serializers.ModelSerializer):
     """
     Serializer for creating new bookings.
     
-    Handles booking creation with automatic total calculation.
+    Handles booking creation with automatic total calculation and seat selection.
     """
+    seat_reservation_ids = serializers.ListField(
+        child=serializers.UUIDField(),
+        required=False,
+        help_text="List of seat reservation IDs to confirm with this booking"
+    )
+    
     class Meta:
         model = Booking
         fields = [
             'showtime', 'number_of_seats', 'seat_numbers', 
-            'special_requests', 'loyalty_points_used'
+            'special_requests', 'loyalty_points_used', 'seat_reservation_ids'
         ]
 
     def validate_number_of_seats(self, value):
@@ -47,24 +54,63 @@ class BookingCreateSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        """Create booking with calculated pricing."""
+        """Create booking with calculated pricing and seat reservation handling."""
         customer = self.context['request'].user.customer_profile
         showtime = validated_data['showtime']
         number_of_seats = validated_data['number_of_seats']
         loyalty_points_used = validated_data.get('loyalty_points_used', 0)
+        seat_reservation_ids = validated_data.pop('seat_reservation_ids', [])
         
-        # Calculate pricing
-        base_price = showtime.ticket_price
-        total_base = base_price * number_of_seats
+        # Handle seat selection if provided
+        selected_seats = []
+        if seat_reservation_ids:
+            # Validate seat reservations belong to this showtime and user
+            reservations = SeatReservation.objects.filter(
+                id__in=seat_reservation_ids,
+                showtime=showtime,
+                status='reserved'
+            )
+            
+            if len(reservations) != len(seat_reservation_ids):
+                raise serializers.ValidationError("Invalid seat reservations provided.")
+            
+            # Check if reservations are expired
+            for reservation in reservations:
+                if reservation.is_expired():
+                    raise serializers.ValidationError(f"Seat reservation {reservation.seat.seat_identifier} has expired.")
+            
+            selected_seats = list(reservations)
+            
+            # Update number of seats to match reservations
+            number_of_seats = len(selected_seats)
+            validated_data['number_of_seats'] = number_of_seats
+        
+        # Calculate pricing (considering seat-specific pricing if seats selected)
+        if selected_seats:
+            # Calculate with seat-specific pricing
+            total_amount = Decimal('0')
+            seat_identifiers = []
+            
+            for reservation in selected_seats:
+                seat_price = showtime.calculate_seat_price(reservation.seat)
+                total_amount += seat_price
+                seat_identifiers.append(reservation.seat.seat_identifier)
+            
+            base_price = total_amount / number_of_seats  # Average price
+            validated_data['seat_numbers'] = seat_identifiers
+        else:
+            # Standard pricing calculation
+            base_price = showtime.ticket_price
+            total_amount = base_price * number_of_seats
         
         # Apply loyalty points discount (1 point = $0.10)
-        points_discount = min(loyalty_points_used * Decimal('0.10'), total_base * Decimal('0.50'))  # Max 50% discount
+        points_discount = min(loyalty_points_used * Decimal('0.10'), total_amount * Decimal('0.50'))  # Max 50% discount
         
         # Validate customer has enough points
         if loyalty_points_used > customer.loyalty_points:
             raise serializers.ValidationError("Insufficient loyalty points.")
         
-        total_amount = total_base - points_discount
+        total_amount = total_amount - points_discount
         
         # Create booking
         booking = Booking.objects.create(
@@ -78,6 +124,12 @@ class BookingCreateSerializer(serializers.ModelSerializer):
             seat_numbers=validated_data.get('seat_numbers', []),
             special_requests=validated_data.get('special_requests', '')
         )
+        
+        # Confirm seat reservations if provided
+        if selected_seats:
+            for reservation in selected_seats:
+                reservation.booking = booking
+                reservation.confirm_reservation()
         
         # Deduct loyalty points if used
         if loyalty_points_used > 0:

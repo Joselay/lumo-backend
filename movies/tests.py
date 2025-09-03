@@ -7,11 +7,13 @@ from django.utils import timezone
 from rest_framework.test import APITestCase, APIClient
 from rest_framework import status
 from django.core.exceptions import ValidationError
-from .models import Movie, Genre, Showtime, Theater
+from .models import Movie, Genre, Showtime, Theater, SeatLayout, Seat, SeatReservation
 from .serializers import (
     MovieListSerializer, MovieDetailSerializer, 
     GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer,
-    TheaterSerializer, TheaterDetailSerializer
+    TheaterSerializer, TheaterDetailSerializer, SeatSerializer,
+    SeatLayoutSerializer, SeatReservationSerializer, ShowtimeSeatMapSerializer,
+    SeatReservationRequestSerializer
 )
 
 
@@ -748,3 +750,670 @@ class TheaterAPITest(APITestCase):
         response = self.client.get(url, {'search': 'Downtown'})
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(len(response.data['results']), 1)
+
+
+class SeatLayoutModelTest(TestCase):
+    """Test cases for the SeatLayout model."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Seat Layout Test Theater",
+            address="123 Test Street",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0123"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="Standard Layout",
+            total_rows=10,
+            total_seats=120,
+            row_configuration={
+                "A": 12, "B": 12, "C": 12, "D": 12, "E": 12,
+                "F": 12, "G": 12, "H": 12, "I": 12, "J": 12
+            }
+        )
+    
+    def test_seat_layout_creation(self):
+        """Test basic seat layout creation."""
+        self.assertEqual(self.seat_layout.theater, self.theater)
+        self.assertEqual(self.seat_layout.screen_number, 1)
+        self.assertEqual(self.seat_layout.name, "Standard Layout")
+        self.assertEqual(self.seat_layout.total_rows, 10)
+        self.assertEqual(self.seat_layout.total_seats, 120)
+        self.assertTrue(self.seat_layout.is_active)
+        self.assertIsInstance(self.seat_layout.id, uuid.UUID)
+    
+    def test_seat_layout_str_method(self):
+        """Test the string representation of SeatLayout."""
+        expected = "Seat Layout Test Theater Screen 1 - Standard Layout"
+        self.assertEqual(str(self.seat_layout), expected)
+    
+    def test_unique_together_constraint(self):
+        """Test the unique constraint on theater and screen_number."""
+        with self.assertRaises(Exception):
+            SeatLayout.objects.create(
+                theater=self.theater,
+                screen_number=1,  # Same theater and screen
+                name="Another Layout",
+                total_rows=8,
+                total_seats=96,
+                row_configuration={"A": 12, "B": 12}
+            )
+    
+    def test_get_seat_map_method(self):
+        """Test the get_seat_map method."""
+        # Create some seats for the layout
+        Seat.objects.create(
+            seat_layout=self.seat_layout,
+            row="A",
+            number=1,
+            seat_type="standard"
+        )
+        Seat.objects.create(
+            seat_layout=self.seat_layout,
+            row="A",
+            number=2,
+            seat_type="premium"
+        )
+        
+        seat_map = self.seat_layout.get_seat_map()
+        self.assertIsInstance(seat_map, list)
+        self.assertTrue(len(seat_map) > 0)
+        # Find row A in the seat map
+        row_a = next((row for row in seat_map if row['row'] == 'A'), None)
+        self.assertIsNotNone(row_a)
+        self.assertIn('seats', row_a)
+
+
+class SeatModelTest(TestCase):
+    """Test cases for the Seat model."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Seat Model Test Theater",
+            address="456 Test Avenue",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0456"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="Test Layout",
+            total_rows=5,
+            total_seats=60,
+            row_configuration={"A": 12, "B": 12, "C": 12, "D": 12, "E": 12}
+        )
+        
+        self.seat = Seat.objects.create(
+            seat_layout=self.seat_layout,
+            row="A",
+            number=12,
+            seat_type="premium",
+            price_multiplier=Decimal('1.5')
+        )
+    
+    def test_seat_creation(self):
+        """Test basic seat creation."""
+        self.assertEqual(self.seat.seat_layout, self.seat_layout)
+        self.assertEqual(self.seat.row, "A")
+        self.assertEqual(self.seat.number, 12)
+        self.assertEqual(self.seat.seat_type, "premium")
+        self.assertEqual(self.seat.price_multiplier, Decimal('1.5'))
+        self.assertTrue(self.seat.is_active)
+        self.assertIsInstance(self.seat.id, uuid.UUID)
+    
+    def test_seat_str_method(self):
+        """Test the string representation of Seat."""
+        expected = "A12 (Premium)"
+        self.assertEqual(str(self.seat), expected)
+    
+    def test_seat_identifier_property(self):
+        """Test the seat_identifier property."""
+        self.assertEqual(self.seat.seat_identifier, "A12")
+    
+    def test_unique_together_constraint(self):
+        """Test the unique constraint on seat_layout, row, and number."""
+        with self.assertRaises(Exception):
+            Seat.objects.create(
+                seat_layout=self.seat_layout,
+                row="A",
+                number=12,  # Same layout, row, and number
+                seat_type="standard"
+            )
+    
+    def test_seat_type_choices(self):
+        """Test different seat type choices."""
+        seat_types = ['standard', 'premium', 'accessible', 'couple', 'blocked']
+        
+        for i, seat_type in enumerate(seat_types, 1):
+            seat = Seat.objects.create(
+                seat_layout=self.seat_layout,
+                row="B",
+                number=i,
+                seat_type=seat_type
+            )
+            self.assertEqual(seat.seat_type, seat_type)
+
+
+class SeatReservationModelTest(TestCase):
+    """Test cases for the SeatReservation model."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Reservation Test Theater",
+            address="789 Test Boulevard",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0789"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="Reservation Layout",
+            total_rows=3,
+            total_seats=36,
+            row_configuration={"A": 12, "B": 12, "C": 12}
+        )
+        
+        self.seat = Seat.objects.create(
+            seat_layout=self.seat_layout,
+            row="A",
+            number=5,
+            seat_type="standard"
+        )
+        
+        self.movie = Movie.objects.create(
+            title="Reservation Test Movie",
+            description="A test movie for reservations.",
+            duration=90,
+            release_date=date.today(),
+            is_active=True
+        )
+        
+        future_time = timezone.now() + timedelta(days=1)
+        self.showtime = Showtime.objects.create(
+            movie=self.movie,
+            theater=self.theater,
+            datetime=future_time,
+            screen_number=1,
+            total_seats=36,
+            available_seats=36,
+            ticket_price=Decimal('12.99'),
+            seat_layout=self.seat_layout
+        )
+        
+        self.reservation = SeatReservation.objects.create(
+            showtime=self.showtime,
+            seat=self.seat,
+            status='reserved',
+            expires_at=timezone.now() + timedelta(minutes=15)
+        )
+    
+    def test_seat_reservation_creation(self):
+        """Test basic seat reservation creation."""
+        self.assertEqual(self.reservation.showtime, self.showtime)
+        self.assertEqual(self.reservation.seat, self.seat)
+        self.assertEqual(self.reservation.status, 'reserved')
+        self.assertIsNotNone(self.reservation.reserved_at)
+        self.assertIsNotNone(self.reservation.expires_at)
+        self.assertIsNone(self.reservation.confirmed_at)
+        self.assertIsNone(self.reservation.booking)
+        self.assertIsInstance(self.reservation.id, uuid.UUID)
+    
+    def test_seat_reservation_str_method(self):
+        """Test the string representation of SeatReservation."""
+        expected = f"A5 - {self.showtime} (reserved)"
+        self.assertEqual(str(self.reservation), expected)
+    
+    def test_is_expired_method(self):
+        """Test the is_expired method."""
+        # Should not be expired yet
+        self.assertFalse(self.reservation.is_expired())
+        
+        # Create expired reservation
+        expired_reservation = SeatReservation.objects.create(
+            showtime=self.showtime,
+            seat=Seat.objects.create(
+                seat_layout=self.seat_layout,
+                row="A",
+                number=6,
+                seat_type="standard"
+            ),
+            status='reserved',
+            expires_at=timezone.now() - timedelta(minutes=5)
+        )
+        
+        self.assertTrue(expired_reservation.is_expired())
+    
+    def test_confirm_reservation_method(self):
+        """Test the confirm_reservation method."""
+        self.reservation.confirm_reservation()
+        
+        self.assertEqual(self.reservation.status, 'confirmed')
+        self.assertIsNotNone(self.reservation.confirmed_at)
+    
+    def test_cancel_reservation_method(self):
+        """Test the cancel_reservation method."""
+        self.reservation.cancel_reservation()
+        
+        self.assertEqual(self.reservation.status, 'cancelled')
+    
+    def test_unique_together_constraint(self):
+        """Test the unique constraint on showtime and seat."""
+        with self.assertRaises(Exception):
+            SeatReservation.objects.create(
+                showtime=self.showtime,
+                seat=self.seat,  # Same showtime and seat
+                status='reserved',
+                expires_at=timezone.now() + timedelta(minutes=10)
+            )
+
+
+class SeatSerializerTest(TestCase):
+    """Test cases for Seat serializers."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Serializer Test Theater",
+            address="123 Serializer Street",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0123"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="Test Layout",
+            total_rows=5,
+            total_seats=60,
+            row_configuration={"A": 12, "B": 12}
+        )
+        
+        self.seat = Seat.objects.create(
+            seat_layout=self.seat_layout,
+            row="A",
+            number=8,
+            seat_type="premium",
+            price_multiplier=Decimal('1.25')
+        )
+    
+    def test_seat_serialization(self):
+        """Test SeatSerializer output."""
+        serializer = SeatSerializer(self.seat)
+        data = serializer.data
+        
+        self.assertEqual(data['row'], 'A')
+        self.assertEqual(data['number'], 8)
+        self.assertEqual(data['seat_identifier'], 'A8')
+        self.assertEqual(data['seat_type'], 'premium')
+        self.assertEqual(data['seat_type_display'], 'Premium')
+        self.assertEqual(data['price_multiplier'], '1.25')
+        self.assertTrue(data['is_active'])
+    
+    def test_seat_layout_serialization(self):
+        """Test SeatLayoutSerializer output."""
+        serializer = SeatLayoutSerializer(self.seat_layout)
+        data = serializer.data
+        
+        self.assertEqual(data['theater_name'], 'Serializer Test Theater')
+        self.assertEqual(data['screen_number'], 1)
+        self.assertEqual(data['name'], 'Test Layout')
+        self.assertEqual(data['total_rows'], 5)
+        self.assertEqual(data['total_seats'], 60)
+        self.assertEqual(data['seat_count'], 1)  # Only one seat created
+        self.assertIn('seat_map', data)
+        self.assertTrue(data['is_active'])
+
+
+class ShowtimeSeatIntegrationTest(TestCase):
+    """Test integration between Showtime and Seat functionality."""
+    
+    def setUp(self):
+        self.theater = Theater.objects.create(
+            name="Integration Test Theater",
+            address="456 Integration Avenue",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0456"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="Integration Layout",
+            total_rows=3,
+            total_seats=18,
+            row_configuration={"A": 6, "B": 6, "C": 6}
+        )
+        
+        # Create some seats
+        self.seats = []
+        for row in ['A', 'B', 'C']:
+            for num in range(1, 7):
+                seat_type = 'premium' if row == 'A' else 'standard'
+                multiplier = Decimal('1.5') if seat_type == 'premium' else Decimal('1.0')
+                seat = Seat.objects.create(
+                    seat_layout=self.seat_layout,
+                    row=row,
+                    number=num,
+                    seat_type=seat_type,
+                    price_multiplier=multiplier
+                )
+                self.seats.append(seat)
+        
+        self.movie = Movie.objects.create(
+            title="Integration Test Movie",
+            description="Test movie for integration testing.",
+            duration=120,
+            release_date=date.today(),
+            is_active=True
+        )
+        
+        future_time = timezone.now() + timedelta(days=1)
+        self.showtime = Showtime.objects.create(
+            movie=self.movie,
+            theater=self.theater,
+            datetime=future_time,
+            screen_number=1,
+            total_seats=18,
+            available_seats=18,
+            ticket_price=Decimal('15.00'),
+            seat_layout=self.seat_layout
+        )
+    
+    def test_showtime_seat_map_generation(self):
+        """Test generating seat availability map for showtime."""
+        # Initially all seats should be available
+        seat_map = self.showtime.get_available_seats_map()
+        
+        self.assertIsInstance(seat_map, list)
+        self.assertEqual(len(seat_map), 3)  # 3 rows
+        
+        # Find row A and check it has 6 seats, all available
+        row_a = next((row for row in seat_map if row['row'] == 'A'), None)
+        self.assertIsNotNone(row_a)
+        self.assertEqual(len(row_a['seats']), 6)
+        for seat_info in row_a['seats']:
+            self.assertTrue(seat_info['is_available'])
+            self.assertEqual(seat_info['seat_type'], 'premium')
+    
+    def test_seat_reservation_affects_availability(self):
+        """Test that seat reservations affect availability map."""
+        # Reserve some seats
+        seat_a1 = self.seats[0]  # A1
+        seat_a2 = self.seats[1]  # A2
+        
+        SeatReservation.objects.create(
+            showtime=self.showtime,
+            seat=seat_a1,
+            status='reserved',
+            expires_at=timezone.now() + timedelta(minutes=15)
+        )
+        
+        SeatReservation.objects.create(
+            showtime=self.showtime,
+            seat=seat_a2,
+            status='confirmed',
+            expires_at=timezone.now() + timedelta(minutes=15)
+        )
+        
+        seat_map = self.showtime.get_available_seats_map()
+        
+        # Find row A and check that A1 and A2 are no longer available
+        row_a = next((row for row in seat_map if row['row'] == 'A'), None)
+        self.assertIsNotNone(row_a)
+        
+        # Create a mapping for easier testing
+        row_a_seats = {seat['seat_id']: seat for seat in row_a['seats']}
+        self.assertFalse(row_a_seats['A1']['is_available'])
+        self.assertFalse(row_a_seats['A2']['is_available'])
+        self.assertTrue(row_a_seats['A3']['is_available'])
+    
+    def test_seat_price_calculation(self):
+        """Test seat-specific price calculation."""
+        # Premium seat (A row) should cost more
+        premium_seat = self.seats[0]  # A1 - premium
+        standard_seat = self.seats[6]  # B1 - standard
+        
+        premium_price = self.showtime.calculate_seat_price(premium_seat)
+        standard_price = self.showtime.calculate_seat_price(standard_seat)
+        
+        expected_premium = self.showtime.ticket_price * Decimal('1.5')
+        expected_standard = self.showtime.ticket_price * Decimal('1.0')
+        
+        self.assertEqual(premium_price, expected_premium)
+        self.assertEqual(standard_price, expected_standard)
+        self.assertGreater(premium_price, standard_price)
+
+
+class SeatAPITest(APITestCase):
+    """Test cases for Seat-related API endpoints."""
+    
+    def setUp(self):
+        self.client = APIClient()
+        
+        # Create user for authentication
+        from django.contrib.auth import get_user_model
+        from rest_framework.authtoken.models import Token
+        User = get_user_model()
+        
+        self.user = User.objects.create_user(
+            username='seatapi',
+            email='seatapi@example.com',
+            password='testpass123'
+        )
+        self.token = Token.objects.create(user=self.user)
+        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
+        
+        self.theater = Theater.objects.create(
+            name="API Seat Test Theater",
+            address="789 API Street",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-0789"
+        )
+        
+        self.seat_layout = SeatLayout.objects.create(
+            theater=self.theater,
+            screen_number=1,
+            name="API Test Layout",
+            total_rows=2,
+            total_seats=12,
+            row_configuration={"A": 6, "B": 6}
+        )
+        
+        # Create some seats
+        self.seats = []
+        for row in ['A', 'B']:
+            for num in range(1, 7):
+                seat = Seat.objects.create(
+                    seat_layout=self.seat_layout,
+                    row=row,
+                    number=num,
+                    seat_type='standard'
+                )
+                self.seats.append(seat)
+        
+        self.movie = Movie.objects.create(
+            title="API Test Movie",
+            description="Test movie for API testing.",
+            duration=100,
+            release_date=date.today(),
+            is_active=True
+        )
+        
+        future_time = timezone.now() + timedelta(days=1)
+        self.showtime = Showtime.objects.create(
+            movie=self.movie,
+            theater=self.theater,
+            datetime=future_time,
+            screen_number=1,
+            total_seats=12,
+            available_seats=12,
+            ticket_price=Decimal('10.00'),
+            seat_layout=self.seat_layout
+        )
+    
+    def test_seat_layout_list_endpoint(self):
+        """Test the seat layout list API endpoint."""
+        url = reverse('movies:seat-layout-list')
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('results', response.data)
+        
+        results = response.data['results']
+        self.assertEqual(len(results), 1)
+        self.assertEqual(results[0]['name'], 'API Test Layout')
+        self.assertEqual(results[0]['seat_count'], 12)
+    
+    def test_showtime_seat_map_endpoint(self):
+        """Test the showtime seat map API endpoint."""
+        url = reverse('movies:showtime-seat-map', kwargs={'pk': str(self.showtime.id)})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['movie_title'], 'API Test Movie')
+        self.assertEqual(response.data['theater_name'], 'API Seat Test Theater')
+        self.assertTrue(response.data['has_seat_selection'])
+        self.assertIn('seat_map', response.data)
+        
+        # Verify seat map structure
+        seat_map = response.data['seat_map']
+        self.assertIn('A', seat_map)
+        self.assertIn('B', seat_map)
+        self.assertEqual(len(seat_map['A']), 6)
+        self.assertEqual(len(seat_map['B']), 6)
+    
+    def test_seat_reservation_endpoint(self):
+        """Test the seat reservation API endpoint."""
+        url = reverse('movies:reserve-seats', kwargs={'showtime_id': str(self.showtime.id)})
+        
+        data = {
+            'seat_ids': ['A1', 'A2', 'B3'],
+            'expiry_minutes': 10
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(len(response.data['reservations']), 3)
+        
+        # Check that reservations were created
+        self.assertEqual(SeatReservation.objects.count(), 3)
+        
+        # Check response structure
+        for reservation in response.data['reservations']:
+            self.assertIn('id', reservation)
+            self.assertIn('seat_identifier', reservation)
+            self.assertEqual(reservation['status'], 'Reserved')
+            self.assertIn('expires_at', reservation)
+    
+    def test_seat_reservation_invalid_seats(self):
+        """Test seat reservation with invalid seat identifiers."""
+        url = reverse('movies:reserve-seats', kwargs={'showtime_id': str(self.showtime.id)})
+        
+        data = {
+            'seat_ids': ['A1', 'Z99'],  # Z99 doesn't exist
+            'expiry_minutes': 10
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_seat_reservation_duplicate_seats(self):
+        """Test seat reservation with already reserved seats."""
+        # Create an existing reservation
+        SeatReservation.objects.create(
+            showtime=self.showtime,
+            seat=self.seats[0],  # A1
+            status='reserved',
+            expires_at=timezone.now() + timedelta(minutes=15)
+        )
+        
+        url = reverse('movies:reserve-seats', kwargs={'showtime_id': str(self.showtime.id)})
+        
+        data = {
+            'seat_ids': ['A1', 'A2'],  # A1 is already reserved
+            'expiry_minutes': 10
+        }
+        
+        response = self.client.post(url, data, format='json')
+        
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+    
+    def test_seat_reservation_request_serializer_validation(self):
+        """Test SeatReservationRequestSerializer validation."""
+        # Test invalid seat ID format
+        serializer = SeatReservationRequestSerializer(data={
+            'seat_ids': ['A1', '1A', 'ABC'],  # Invalid formats
+            'expiry_minutes': 10
+        })
+        
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('seat_ids', serializer.errors)
+        
+        # Test empty seat list
+        serializer = SeatReservationRequestSerializer(data={
+            'seat_ids': [],
+            'expiry_minutes': 10
+        })
+        
+        self.assertFalse(serializer.is_valid())
+        self.assertIn('seat_ids', serializer.errors)
+        
+        # Test valid data
+        serializer = SeatReservationRequestSerializer(data={
+            'seat_ids': ['A1', 'B2'],
+            'expiry_minutes': 15
+        })
+        
+        self.assertTrue(serializer.is_valid())
+    
+    def test_showtime_without_seat_layout(self):
+        """Test showtime seat map endpoint for showtime without seat layout."""
+        # Create a new theater for this showtime to avoid conflicts
+        theater_no_seats = Theater.objects.create(
+            name="No Seats Theater",
+            address="999 No Seats Street",
+            city="Test City",
+            state="TS",
+            zip_code="12345",
+            phone_number="+1-555-9999"
+        )
+        
+        # Create showtime without seat layout
+        showtime_no_seats = Showtime.objects.create(
+            movie=self.movie,
+            theater=theater_no_seats,
+            datetime=timezone.now() + timedelta(days=3, hours=2),  # Different time to avoid conflicts
+            screen_number=1,
+            total_seats=50,
+            available_seats=50,
+            ticket_price=Decimal('10.00'),
+            is_active=True
+            # No seat_layout specified
+        )
+        
+        url = reverse('movies:showtime-seat-map', kwargs={'pk': str(showtime_no_seats.id)})
+        response = self.client.get(url)
+        
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['has_seat_selection'])
+        self.assertIsNone(response.data['seat_map'])

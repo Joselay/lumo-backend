@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from drf_yasg.utils import swagger_serializer_method
 from drf_yasg import openapi
-from .models import Movie, Genre, Showtime, Theater
+from .models import Movie, Genre, Showtime, Theater, SeatLayout, Seat, SeatReservation
 
 
 class GenreSerializer(serializers.ModelSerializer):
@@ -238,3 +238,132 @@ class MovieDetailSerializer(serializers.ModelSerializer):
             hours, minutes = divmod(data['duration'], 60)
             data['duration_formatted'] = f"{hours}h {minutes}m" if hours > 0 else f"{minutes}m"
         return data
+
+
+class SeatSerializer(serializers.ModelSerializer):
+    """
+    Serializer for individual seats.
+    
+    Provides seat information including position and type.
+    """
+    
+    seat_identifier = serializers.ReadOnlyField(help_text="Seat identifier like \"A12\"")
+    seat_type_display = serializers.CharField(source="get_seat_type_display", read_only=True)
+    
+    class Meta:
+        model = Seat
+        fields = [
+            "id", "row", "number", "seat_identifier", "seat_type", "seat_type_display",
+            "price_multiplier", "is_active"
+        ]
+
+
+class SeatLayoutSerializer(serializers.ModelSerializer):
+    """
+    Serializer for seat layout configuration.
+    
+    Provides theater screen layout with seat arrangement.
+    """
+    
+    theater_name = serializers.CharField(source="theater.name", read_only=True)
+    seat_count = serializers.SerializerMethodField(help_text="Number of seats in this layout")
+    seat_map = serializers.SerializerMethodField(help_text="Visual seat map representation")
+    
+    class Meta:
+        model = SeatLayout
+        fields = [
+            "id", "theater", "theater_name", "screen_number", "name",
+            "total_rows", "total_seats", "row_configuration",
+            "seat_count", "seat_map", "is_active"
+        ]
+    
+    def get_seat_count(self, obj):
+        """Get the actual number of seats in the database."""
+        return obj.seats.filter(is_active=True).count()
+    
+    def get_seat_map(self, obj):
+        """Get the visual seat map."""
+        return obj.get_seat_map()
+
+
+class SeatReservationSerializer(serializers.ModelSerializer):
+    """
+    Serializer for seat reservations.
+    
+    Tracks which seats are reserved for specific showtimes.
+    """
+    
+    seat_identifier = serializers.CharField(source="seat.seat_identifier", read_only=True)
+    seat_type = serializers.CharField(source="seat.seat_type", read_only=True)
+    status_display = serializers.CharField(source="get_status_display", read_only=True)
+    is_expired = serializers.ReadOnlyField(help_text="Whether the reservation has expired")
+    
+    class Meta:
+        model = SeatReservation
+        fields = [
+            "id", "seat", "seat_identifier", "seat_type", "status", "status_display",
+            "reserved_at", "confirmed_at", "expires_at", "is_expired"
+        ]
+
+
+class ShowtimeSeatMapSerializer(serializers.ModelSerializer):
+    """
+    Serializer for showtime with seat availability map.
+    
+    Provides showtime information with real-time seat availability.
+    """
+    
+    movie_title = serializers.CharField(source="movie.title", read_only=True)
+    theater_name = serializers.CharField(source="theater.name", read_only=True)
+    seat_map = serializers.SerializerMethodField(help_text="Seat availability map")
+    has_seat_selection = serializers.SerializerMethodField(help_text="Whether this showtime supports seat selection")
+    
+    class Meta:
+        model = Showtime
+        fields = [
+            "id", "movie_title", "theater_name", "datetime", "screen_number",
+            "ticket_price", "total_seats", "available_seats",
+            "has_seat_selection", "seat_map"
+        ]
+    
+    def get_has_seat_selection(self, obj):
+        """Check if this showtime has seat selection enabled."""
+        return obj.seat_layout is not None
+    
+    def get_seat_map(self, obj):
+        """Get the seat availability map for this showtime."""
+        return obj.get_available_seats_map()
+
+
+class SeatReservationRequestSerializer(serializers.Serializer):
+    """
+    Serializer for seat reservation requests.
+    
+    Handles seat selection during booking process.
+    """
+    
+    seat_ids = serializers.ListField(
+        child=serializers.CharField(max_length=10),
+        help_text="List of seat identifiers to reserve (e.g., [\"A12\", \"A13\"])"
+    )
+    expiry_minutes = serializers.IntegerField(
+        default=15,
+        min_value=5,
+        max_value=60,
+        help_text="Minutes until reservation expires"
+    )
+    
+    def validate_seat_ids(self, value):
+        """Validate seat identifiers format."""
+        if not value:
+            raise serializers.ValidationError("At least one seat must be selected.")
+        
+        # Validate seat ID format (e.g., \"A12\", \"B5\")
+        import re
+        pattern = r"^[A-Z]\d+$"
+        for seat_id in value:
+            if not re.match(pattern, seat_id):
+                raise serializers.ValidationError(f"Invalid seat ID format: {seat_id}")
+        
+        return value
+

@@ -1,11 +1,16 @@
-from rest_framework import generics, filters, status
+from rest_framework import generics, filters, status, permissions
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Movie, Genre, Showtime, Theater
-from .serializers import MovieListSerializer, MovieDetailSerializer, GenreSerializer, ShowtimeSerializer, ShowtimeDetailSerializer, TheaterSerializer, TheaterDetailSerializer
+from .models import Movie, Genre, Showtime, Theater, SeatLayout, Seat, SeatReservation
+from .serializers import (
+    MovieListSerializer, MovieDetailSerializer, GenreSerializer, ShowtimeSerializer, 
+    ShowtimeDetailSerializer, TheaterSerializer, TheaterDetailSerializer,
+    SeatLayoutSerializer, SeatSerializer, SeatReservationSerializer, 
+    ShowtimeSeatMapSerializer, SeatReservationRequestSerializer
+)
 
 
 class GenreListView(generics.ListAPIView):
@@ -527,6 +532,277 @@ class TheaterDetailView(generics.RetrieveAPIView):
             )
         },
         tags=['Theaters']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class ShowtimeSeatMapView(generics.RetrieveAPIView):
+    """
+    API endpoint to retrieve seat map for a specific showtime.
+    
+    Returns the visual seat layout with real-time availability.
+    """
+    queryset = Showtime.objects.filter(is_active=True, movie__is_active=True)
+    serializer_class = ShowtimeSeatMapSerializer
+    permission_classes = [permissions.AllowAny]
+    
+    @swagger_auto_schema(
+        operation_summary="Get showtime seat map",
+        operation_description="""
+        Retrieve the seat layout and availability for a specific showtime.
+        
+        **Use Cases:**
+        - Display seat selection interface
+        - Show real-time seat availability
+        - Calculate pricing for different seat types
+        
+        **Seat Status:**
+        - `is_available: true` - Seat can be selected
+        - `is_available: false` - Seat is already reserved/confirmed
+        - `is_blocked: true` - Seat is not available (maintenance, etc.)
+        
+        **Seat Types:**
+        - `standard` - Regular seating (price_multiplier: 1.0)
+        - `premium` - Premium seating (price_multiplier: 1.5+)
+        - `accessible` - Wheelchair accessible
+        - `couple` - Couple/love seats
+        - `blocked` - Not available for booking
+        
+        **Response:**
+        Returns showtime details with complete seat map showing availability and pricing.
+        """,
+        responses={
+            200: openapi.Response(
+                description="Seat map retrieved successfully",
+                schema=ShowtimeSeatMapSerializer(),
+                examples={
+                    "application/json": {
+                        "id": "uuid-here",
+                        "movie_title": "Avengers: Endgame",
+                        "theater_name": "Lumo Cinema Downtown",
+                        "datetime": "2024-12-25T19:00:00Z",
+                        "screen_number": 1,
+                        "ticket_price": "15.99",
+                        "total_seats": 120,
+                        "available_seats": 85,
+                        "has_seat_selection": True,
+                        "seat_map": [
+                            {
+                                "row": "A",
+                                "seats": [
+                                    {
+                                        "seat_id": "A1",
+                                        "seat_type": "premium",
+                                        "price_multiplier": 1.5,
+                                        "is_available": True,
+                                        "is_blocked": False
+                                    },
+                                    {
+                                        "seat_id": "A2",
+                                        "seat_type": "premium",
+                                        "price_multiplier": 1.5,
+                                        "is_available": False,
+                                        "is_blocked": False
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ),
+            404: openapi.Response(description="Showtime not found"),
+            400: openapi.Response(
+                description="Seat selection not available for this showtime",
+                examples={
+                    "application/json": {
+                        "error": "This showtime does not support seat selection."
+                    }
+                }
+            )
+        },
+        tags=['Seat Selection']
+    )
+    def get(self, request, *args, **kwargs):
+        showtime = self.get_object()
+        
+        # Check if seat selection is available
+        if not showtime.seat_layout:
+            return Response(
+                {'error': 'This showtime does not support seat selection.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        return super().get(request, *args, **kwargs)
+
+
+class SeatReservationView(generics.CreateAPIView):
+    """
+    API endpoint to reserve seats for a showtime.
+    
+    Creates temporary seat reservations during the booking process.
+    """
+    serializer_class = SeatReservationRequestSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @swagger_auto_schema(
+        operation_summary="Reserve seats for showtime",
+        operation_description="""
+        Reserve specific seats for a showtime during the booking process.
+        
+        **Reservation Process:**
+        1. Seats are temporarily reserved for the specified duration (default: 15 minutes)
+        2. Customer must complete booking before expiry
+        3. Expired reservations are automatically released
+        4. Confirmed bookings convert temporary reservations to permanent
+        
+        **Features:**
+        - Real-time seat availability checking
+        - Automatic expiry management
+        - Conflict prevention (no double-booking)
+        - Price calculation with seat type multipliers
+        
+        **Authentication Required**
+        """,
+        request_body=SeatReservationRequestSerializer,
+        responses={
+            201: openapi.Response(
+                description="Seats reserved successfully",
+                examples={
+                    "application/json": {
+                        "message": "Seats reserved successfully",
+                        "reservations": [
+                            {
+                                "id": "reservation-uuid",
+                                "seat_identifier": "A12",
+                                "seat_type": "premium",
+                                "status": "reserved",
+                                "expires_at": "2024-12-25T19:15:00Z",
+                                "price": "23.99"
+                            }
+                        ],
+                        "total_price": "47.98",
+                        "expires_at": "2024-12-25T19:15:00Z"
+                    }
+                }
+            ),
+            400: openapi.Response(
+                description="Seat reservation failed",
+                examples={
+                    "application/json": {
+                        "seat_ids": ["Seat A12 is already reserved"],
+                        "non_field_errors": ["This showtime does not support seat selection"]
+                    }
+                }
+            ),
+            404: openapi.Response(description="Showtime not found"),
+            401: openapi.Response(description="Authentication required")
+        },
+        tags=['Seat Selection']
+    )
+    def create(self, request, *args, **kwargs):
+        showtime_id = kwargs.get('showtime_id')
+        
+        try:
+            showtime = Showtime.objects.get(
+                id=showtime_id,
+                is_active=True,
+                movie__is_active=True
+            )
+        except Showtime.DoesNotExist:
+            return Response(
+                {'error': 'Showtime not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+        
+        # Check if seat selection is available
+        if not showtime.seat_layout:
+            return Response(
+                {'error': 'This showtime does not support seat selection.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        seat_ids = serializer.validated_data['seat_ids']
+        expiry_minutes = serializer.validated_data['expiry_minutes']
+        
+        try:
+            # Reserve the seats
+            reservations = showtime.reserve_seats(
+                seat_ids=seat_ids,
+                customer=request.user,
+                expiry_minutes=expiry_minutes
+            )
+            
+            # Calculate total price
+            total_price = 0
+            reservation_data = []
+            
+            for reservation in reservations:
+                seat_price = showtime.calculate_seat_price(reservation.seat)
+                total_price += seat_price
+                
+                reservation_data.append({
+                    'id': str(reservation.id),
+                    'seat_identifier': reservation.seat.seat_identifier,
+                    'seat_type': reservation.seat.seat_type,
+                    'status': reservation.status,
+                    'expires_at': reservation.expires_at,
+                    'price': str(seat_price)
+                })
+            
+            return Response({
+                'message': 'Seats reserved successfully',
+                'reservations': reservation_data,
+                'total_price': str(total_price),
+                'expires_at': reservations[0].expires_at if reservations else None
+            }, status=status.HTTP_201_CREATED)
+            
+        except ValueError as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+
+class SeatLayoutListView(generics.ListAPIView):
+    """
+    API endpoint to list seat layouts for theaters.
+    
+    Returns available seat configurations for theater screens.
+    """
+    queryset = SeatLayout.objects.filter(is_active=True)
+    serializer_class = SeatLayoutSerializer
+    permission_classes = [permissions.AllowAny]
+    filter_backends = [DjangoFilterBackend]
+    filterset_fields = ['theater', 'screen_number']
+    
+    @swagger_auto_schema(
+        operation_summary="List seat layouts",
+        operation_description="""
+        Retrieve seat layout configurations for theater screens.
+        
+        **Use Cases:**
+        - Display available theater configurations
+        - Setup seat selection for showtimes
+        - Understand theater capacity and layout
+        
+        **Filtering:**
+        - Filter by theater ID
+        - Filter by screen number
+        
+        **Response:**
+        Returns list of seat layouts with configuration details and visual maps.
+        """,
+        responses={
+            200: openapi.Response(
+                description="Seat layouts retrieved successfully",
+                schema=SeatLayoutSerializer(many=True)
+            )
+        },
+        tags=['Seat Management']
     )
     def get(self, request, *args, **kwargs):
         return super().get(request, *args, **kwargs)
