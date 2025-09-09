@@ -33,6 +33,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - `movies/` - Django app handling movie and genre management
 - `accounts/` - User management and authentication
 - `bookings/` - Booking and payment management
+- `chat/` - AI chat functionality using DeepSeek AI model
 
 ### API Design
 - **Base URL**: `/api/v1/`
@@ -76,6 +77,9 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - `GET /api/v1/bookings/payments/` - List customer's payments
 - `POST /api/v1/bookings/payments/create/` - Process payment for booking
 
+**AI Chat:**
+- `POST /api/v1/chat/ai-chat/` - Send message to AI assistant and get response (requires authentication)
+
 ### Key Features
 - **Movie Management**: Filtering, searching, and ordering of movies and showtimes
 - **User Authentication**: JWT-based authentication with access and refresh tokens
@@ -85,8 +89,28 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - **Real-time Availability**: Seat availability updates in real-time
 - **Booking Cancellation**: Time-based cancellation rules (2+ hours before showtime)
 - **Loyalty Program**: Points earned on purchases and redeemable for discounts
+- **AI Chat Assistant**: DeepSeek-powered AI assistant for movie recommendations and cinema queries
 - **Comprehensive API Documentation**: Extensive Swagger/OpenAPI documentation with examples
 - **Admin Interface**: Full Django admin integration for all models
+
+### Environment Setup
+The project uses environment variables for sensitive configuration. Copy `.env.example` to `.env` and configure:
+
+**Required Environment Variables:**
+- `DEEPSEEK_API_KEY` - Your DeepSeek API key for AI chat functionality
+- `DEEPSEEK_BASE_URL` - DeepSeek API base URL (default: https://api.deepseek.com)
+- `SECRET_KEY` - Django secret key
+- `DEBUG` - Debug mode (True/False)
+- `DATABASE_NAME` - PostgreSQL database name
+- `DATABASE_USER` - Database user
+- `DATABASE_PASSWORD` - Database password
+- `DATABASE_HOST` - Database host
+- `DATABASE_PORT` - Database port
+
+**Setup Steps:**
+1. `cp .env.example .env`
+2. Edit `.env` with your configuration values
+3. Ensure `.env` is in `.gitignore` (already configured)
 
 ### Dependencies
 - Django 4.2.23
@@ -95,7 +119,8 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - PostgreSQL (psycopg2-binary)
 - django-filter for advanced filtering
 - drf-yasg for API documentation
-- python-decouple for environment variables (not currently used)
+- python-decouple for environment variables
+- openai for DeepSeek AI integration
 
 ### Settings Notes
 - Database: PostgreSQL with hardcoded connection settings

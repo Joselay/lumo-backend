@@ -6,14 +6,11 @@ from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
 from openai import OpenAI
 import logging
+from django.conf import settings
 
 from .serializers import ChatMessageSerializer, ChatResponseSerializer
 
 logger = logging.getLogger(__name__)
-
-# DeepSeek API configuration
-DEEPSEEK_API_KEY = "sk-87b68a2336224fcca41a328cb1836919"
-DEEPSEEK_BASE_URL = "https://api.deepseek.com"
 
 
 @swagger_auto_schema(
@@ -61,8 +58,8 @@ def ai_chat(request):
         # Initialize OpenAI client for DeepSeek with explicit parameters
         import httpx
         client = OpenAI(
-            api_key=DEEPSEEK_API_KEY,
-            base_url=DEEPSEEK_BASE_URL,
+            api_key=settings.DEEPSEEK_API_KEY,
+            base_url=settings.DEEPSEEK_BASE_URL,
             http_client=httpx.Client(timeout=30.0)
         )
         
