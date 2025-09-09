@@ -33,7 +33,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - `movies/` - Django app handling movie and genre management
 - `accounts/` - User management and authentication
 - `bookings/` - Booking and payment management
-- `chat/` - AI chat functionality using DeepSeek AI model
+- `chat/` - AI chat functionality using OpenRouter with DeepSeek AI model
 
 ### API Design
 - **Base URL**: `/api/v1/`
@@ -89,7 +89,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - **Real-time Availability**: Seat availability updates in real-time
 - **Booking Cancellation**: Time-based cancellation rules (2+ hours before showtime)
 - **Loyalty Program**: Points earned on purchases and redeemable for discounts
-- **AI Chat Assistant**: DeepSeek-powered AI assistant for movie recommendations and cinema queries
+- **AI Chat Assistant**: OpenRouter-powered AI assistant using DeepSeek model for movie recommendations and cinema queries
 - **Comprehensive API Documentation**: Extensive Swagger/OpenAPI documentation with examples
 - **Admin Interface**: Full Django admin integration for all models
 
@@ -97,8 +97,8 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 The project uses environment variables for sensitive configuration. Copy `.env.example` to `.env` and configure:
 
 **Required Environment Variables:**
-- `DEEPSEEK_API_KEY` - Your DeepSeek API key for AI chat functionality
-- `DEEPSEEK_BASE_URL` - DeepSeek API base URL (default: https://api.deepseek.com)
+- `OPENROUTER_API_KEY` - Your OpenRouter API key for AI chat functionality
+- `OPENROUTER_BASE_URL` - OpenRouter API base URL (default: https://openrouter.ai/api/v1)
 - `SECRET_KEY` - Django secret key
 - `DEBUG` - Debug mode (True/False)
 - `DATABASE_NAME` - PostgreSQL database name
@@ -120,7 +120,7 @@ The project uses environment variables for sensitive configuration. Copy `.env.e
 - django-filter for advanced filtering
 - drf-yasg for API documentation
 - python-decouple for environment variables
-- openai for DeepSeek AI integration
+- openai for OpenRouter AI integration
 
 ### Settings Notes
 - Database: PostgreSQL with hardcoded connection settings

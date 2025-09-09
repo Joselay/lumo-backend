@@ -30,7 +30,7 @@ logger = logging.getLogger(__name__)
             schema=ChatResponseSerializer
         ),
     },
-    operation_description='Send a message to AI and get a response back using DeepSeek model',
+    operation_description='Send a message to AI and get a response back using OpenRouter with DeepSeek model',
     operation_summary='AI Chat',
     tags=['Chat'],
 )
@@ -38,7 +38,7 @@ logger = logging.getLogger(__name__)
 @permission_classes([IsAuthenticated])
 def ai_chat(request):
     """
-    Send a message to AI and get a response back using DeepSeek model.
+    Send a message to AI and get a response back using OpenRouter with DeepSeek model.
     
     This endpoint allows authenticated users to have a conversation with AI.
     The AI acts as a helpful assistant for cinema-related queries.
@@ -55,17 +55,17 @@ def ai_chat(request):
     user_message = serializer.validated_data['message']
     
     try:
-        # Initialize OpenAI client for DeepSeek with explicit parameters
+        # Initialize OpenAI client for OpenRouter with explicit parameters
         import httpx
         client = OpenAI(
-            api_key=settings.DEEPSEEK_API_KEY,
-            base_url=settings.DEEPSEEK_BASE_URL,
+            api_key=settings.OPENROUTER_API_KEY,
+            base_url=settings.OPENROUTER_BASE_URL,
             http_client=httpx.Client(timeout=30.0)
         )
         
         # Create chat completion
         response = client.chat.completions.create(
-            model="deepseek-chat",
+            model="deepseek/deepseek-chat-v3.1",
             messages=[
                 {
                     "role": "system", 
@@ -76,6 +76,11 @@ def ai_chat(request):
                     "content": user_message
                 },
             ],
+            extra_headers={
+                "HTTP-Referer": "https://lumo-cinema.com",  # Optional site URL for rankings
+                "X-Title": "Lumo Cinema Assistant",  # Optional site title for rankings
+            },
+            extra_body={},
             stream=False,
             max_tokens=500,
             temperature=0.7,
@@ -92,7 +97,7 @@ def ai_chat(request):
         }, status=status.HTTP_200_OK)
         
     except Exception as e:
-        logger.error(f"DeepSeek API error: {str(e)}")
+        logger.error(f"OpenRouter API error: {str(e)}")
         
         return Response({
             'success': False,
