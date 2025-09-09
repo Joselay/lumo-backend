@@ -100,12 +100,12 @@ class RegisterView(generics.CreateAPIView):
     Authenticate user and return JWT tokens.
     
     **Features:**
-    - Login with username or email
+    - Login with email and password only
     - Returns JWT access and refresh tokens
     - Includes customer profile information
     
     **Authentication:**
-    Supports login with either username or email address.
+    Login requires email address and password.
     """,
     request_body=UserLoginSerializer,
     responses={

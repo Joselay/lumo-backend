@@ -55,26 +55,22 @@ class UserLoginSerializer(serializers.Serializer):
     """
     Serializer for user authentication.
     
-    Supports login with username or email.
+    Login with email and password only.
     """
-    username_or_email = serializers.CharField(help_text="Username or email address")
+    email = serializers.EmailField(help_text="Email address")
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
     
     def validate(self, data):
-        """Authenticate user with username or email."""
-        username_or_email = data['username_or_email']
+        """Authenticate user with email and password."""
+        email = data['email']
         password = data['password']
         
-        # Try to authenticate with username first
-        user = authenticate(username=username_or_email, password=password)
-        
-        # If that fails, try to find user by email and authenticate with username
-        if not user:
-            try:
-                user_obj = User.objects.get(email=username_or_email)
-                user = authenticate(username=user_obj.username, password=password)
-            except User.DoesNotExist:
-                pass
+        # Find user by email and authenticate with username
+        try:
+            user_obj = User.objects.get(email=email)
+            user = authenticate(username=user_obj.username, password=password)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("Invalid credentials.")
         
         if not user:
             raise serializers.ValidationError("Invalid credentials.")
