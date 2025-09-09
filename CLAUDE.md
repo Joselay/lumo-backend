@@ -37,7 +37,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 ### API Design
 - **Base URL**: `/api/v1/`
 - **Documentation**: Swagger UI at `/api/v1/docs/` and ReDoc at `/api/v1/redoc/`
-- **Authentication**: Token-based and Session authentication via DRF
+- **Authentication**: JWT-only authentication with refresh tokens via DRF Simple JWT
 - **Pagination**: 20 items per page for list endpoints
 
 ### Key Models
@@ -59,9 +59,10 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 - `GET /api/v1/movies/{id}/showtimes/` - Get showtimes for a specific movie
 
 **Authentication:**
-- `POST /api/v1/auth/register/` - Register new user account
-- `POST /api/v1/auth/login/` - User login (returns token)
-- `POST /api/v1/auth/logout/` - User logout (invalidates token)
+- `POST /api/v1/auth/register/` - Register new user account (returns JWT tokens)
+- `POST /api/v1/auth/login/` - User login (returns JWT access and refresh tokens)
+- `POST /api/v1/auth/logout/` - User logout (blacklists refresh token)
+- `POST /api/v1/auth/token/refresh/` - Refresh JWT access token
 - `GET /api/v1/auth/profile/` - Get user profile
 - `PUT/PATCH /api/v1/auth/customer-profile/` - Update customer profile
 
@@ -77,7 +78,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 
 ### Key Features
 - **Movie Management**: Filtering, searching, and ordering of movies and showtimes
-- **User Authentication**: Token-based authentication with user registration/login
+- **User Authentication**: JWT-based authentication with access and refresh tokens
 - **Customer Profiles**: Extended user profiles with contact info and loyalty points
 - **Booking System**: Complete ticket booking with seat availability tracking
 - **Payment Processing**: Mock payment system with transaction tracking
@@ -90,6 +91,7 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 ### Dependencies
 - Django 4.2.23
 - Django REST Framework 3.16.1
+- Django REST Framework Simple JWT 5.3.0
 - PostgreSQL (psycopg2-binary)
 - django-filter for advanced filtering
 - drf-yasg for API documentation
@@ -98,5 +100,6 @@ This is a Django REST API for a cinema ticket booking system called "Lumo Cinema
 ### Settings Notes
 - Database: PostgreSQL with hardcoded connection settings
 - DEBUG=True (development mode)
-- REST Framework configured with Token + Session auth and pagination
-- Comprehensive Swagger and ReDoc documentation settings
+- REST Framework configured with JWT-only auth and pagination
+- JWT tokens: 60-minute access token, 7-day refresh token with rotation
+- Comprehensive Swagger and ReDoc documentation settings with Bearer token auth

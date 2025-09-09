@@ -1,7 +1,7 @@
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
-from rest_framework.authtoken.models import Token
+from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
@@ -28,12 +28,12 @@ class RegisterView(generics.CreateAPIView):
         
         **Features:**
         - Creates both User and Customer profile
-        - Returns authentication token
+        - Returns JWT access and refresh tokens
         - Validates email uniqueness
         - Requires password confirmation
         
         **Response:**
-        Returns user information and authentication token for immediate login.
+        Returns user information with JWT access and refresh tokens for immediate login.
         """,
         responses={
             201: openapi.Response(
@@ -47,7 +47,8 @@ class RegisterView(generics.CreateAPIView):
                             "first_name": "John",
                             "last_name": "Doe"
                         },
-                        "token": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b",
+                        "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                         "customer_profile": {
                             "id": "uuid-here",
                             "phone_number": "+1234567890",
@@ -73,10 +74,11 @@ class RegisterView(generics.CreateAPIView):
         serializer.is_valid(raise_exception=True)
         user = serializer.save()
         
-        # Create authentication token
-        token, created = Token.objects.get_or_create(user=user)
+        # Create JWT tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
         
-        # Return user data with token
+        # Return user data with tokens
         return Response({
             'user': {
                 'id': user.id,
@@ -85,7 +87,8 @@ class RegisterView(generics.CreateAPIView):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
             },
-            'token': token.key,
+            'access_token': str(access_token),
+            'refresh_token': str(refresh),
             'customer_profile': CustomerSerializer(user.customer_profile).data
         }, status=status.HTTP_201_CREATED)
 
@@ -94,11 +97,11 @@ class RegisterView(generics.CreateAPIView):
     method='post',
     operation_summary="User login",
     operation_description="""
-    Authenticate user and return access token.
+    Authenticate user and return JWT tokens.
     
     **Features:**
     - Login with username or email
-    - Returns authentication token
+    - Returns JWT access and refresh tokens
     - Includes customer profile information
     
     **Authentication:**
@@ -117,7 +120,8 @@ class RegisterView(generics.CreateAPIView):
                         "first_name": "John",
                         "last_name": "Doe"
                     },
-                    "token": "9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b",
+                    "access_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
+                    "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9...",
                     "customer_profile": {
                         "id": "uuid-here",
                         "phone_number": "+1234567890",
@@ -149,8 +153,9 @@ def login_view(request):
     if serializer.is_valid():
         user = serializer.validated_data['user']
         
-        # Get or create authentication token
-        token, created = Token.objects.get_or_create(user=user)
+        # Create JWT tokens
+        refresh = RefreshToken.for_user(user)
+        access_token = refresh.access_token
         
         # Ensure customer profile exists
         customer, created = Customer.objects.get_or_create(
@@ -166,7 +171,8 @@ def login_view(request):
                 'first_name': user.first_name,
                 'last_name': user.last_name,
             },
-            'token': token.key,
+            'access_token': str(access_token),
+            'refresh_token': str(refresh),
             'customer_profile': CustomerSerializer(customer).data
         })
     
@@ -177,7 +183,7 @@ def login_view(request):
     method='post',
     operation_summary="User logout",
     operation_description="""
-    Logout current user by deleting their authentication token.
+    Logout current user by blacklisting their refresh token.
     
     **Authentication Required**
     """,
@@ -200,12 +206,16 @@ def logout_view(request):
     """
     API endpoint for user logout.
     
-    Deletes the user's authentication token.
+    Blacklists the user's refresh token to invalidate the JWT.
     """
     try:
-        request.user.auth_token.delete()
+        # Get the refresh token from the request
+        refresh_token = request.data.get('refresh_token')
+        if refresh_token:
+            token = RefreshToken(refresh_token)
+            token.blacklist()
         return Response({'message': 'Successfully logged out.'})
-    except:
+    except Exception:
         return Response({'message': 'Successfully logged out.'})
 
 
