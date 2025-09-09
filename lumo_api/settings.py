@@ -205,6 +205,6 @@ REDOC_SETTINGS = {
     'PATH_IN_MIDDLE': True,
 }
 
-# DeepSeek AI Configuration
-DEEPSEEK_API_KEY = config('DEEPSEEK_API_KEY', default='')
-DEEPSEEK_BASE_URL = config('DEEPSEEK_BASE_URL', default='https://api.deepseek.com')
+# OpenRouter AI Configuration
+OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
+OPENROUTER_BASE_URL = config('OPENROUTER_BASE_URL', default='https://openrouter.ai/api/v1')
