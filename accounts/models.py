@@ -4,6 +4,53 @@ from django.contrib.auth.models import User
 from django.core.validators import RegexValidator
 
 
+class UserProfile(models.Model):
+    """
+    User profile model extending Django's User with role-based access.
+    """
+    ROLE_CHOICES = [
+        ('customer', 'Customer'),
+        ('admin', 'Admin'),
+    ]
+    
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_profile')
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='customer',
+        help_text="User role for access control"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    @property
+    def is_admin(self):
+        """Check if user has admin privileges."""
+        return self.role == 'admin'
+    
+    def __str__(self):
+        return f"{self.user.username} ({self.role})"
+    
+    class Meta:
+        ordering = ['-created_at']
+
+
+# Add is_admin property to User model
+def user_is_admin(self):
+    try:
+        return self.user_profile.is_admin
+    except UserProfile.DoesNotExist:
+        return False
+
+def user_role(self):
+    try:
+        return self.user_profile.role
+    except UserProfile.DoesNotExist:
+        return 'customer'
+
+User.add_to_class('is_admin', property(user_is_admin))
+User.add_to_class('role', property(user_role))
+
+
 class Customer(models.Model):
     """
     Customer profile extending Django's User model.

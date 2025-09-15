@@ -1,7 +1,8 @@
 from rest_framework import serializers
-from django.contrib.auth.models import User
 from django.contrib.auth import authenticate
-from .models import Customer
+from django.contrib.auth.models import User
+from rest_framework_simplejwt.tokens import RefreshToken
+from .models import UserProfile, Customer
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -29,7 +30,7 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
         return data
 
     def create(self, validated_data):
-        """Create user and associated customer profile."""
+        """Create user, user profile, and associated customer profile."""
         phone_number = validated_data.pop('phone_number')
         validated_data.pop('password_confirm')
         
@@ -41,6 +42,9 @@ class UserRegistrationSerializer(serializers.ModelSerializer):
             last_name=validated_data.get('last_name', ''),
             password=validated_data['password']
         )
+        
+        # Create user profile (role defaults to 'customer')
+        UserProfile.objects.create(user=user)
         
         # Create customer profile
         Customer.objects.create(
@@ -61,7 +65,7 @@ class UserLoginSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True, style={'input_type': 'password'})
     
     def validate(self, data):
-        """Authenticate user with email and password."""
+        """Authenticate user with email and password and return token data."""
         email = data['email']
         password = data['password']
         
@@ -78,7 +82,24 @@ class UserLoginSerializer(serializers.Serializer):
         if not user.is_active:
             raise serializers.ValidationError("User account is disabled.")
         
+        # Generate JWT tokens
+        refresh = RefreshToken.for_user(user)
+        
+        # Return user and token data
         data['user'] = user
+        data['tokens'] = {
+            'access': str(refresh.access_token),
+            'refresh': str(refresh),
+        }
+        data['user_info'] = {
+            'id': user.id,
+            'username': user.username,
+            'email': user.email,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+            'role': user.role,
+            'is_admin': user.is_admin,
+        }
         return data
 
 
@@ -145,11 +166,12 @@ class CustomerUpdateSerializer(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     """
-    Combined serializer for user profile including customer information.
+    Combined serializer for user profile including customer information and role.
     """
     customer_profile = CustomerSerializer(read_only=True)
+    is_admin = serializers.ReadOnlyField()
     
     class Meta:
         model = User
-        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'date_joined', 'customer_profile']
-        read_only_fields = ['id', 'username', 'date_joined']
+        fields = ['id', 'username', 'email', 'first_name', 'last_name', 'role', 'is_admin', 'date_joined', 'customer_profile']
+        read_only_fields = ['id', 'username', 'role', 'is_admin', 'date_joined']

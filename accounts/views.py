@@ -1,15 +1,21 @@
 from rest_framework import generics, status, permissions
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.views import APIView
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import login
+from django.db.models import Count, Q
 from drf_yasg.utils import swagger_auto_schema
 from drf_yasg import openapi
-from .models import Customer
+from django.contrib.auth.models import User
+from .models import UserProfile, Customer
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, 
     CustomerSerializer, CustomerUpdateSerializer, UserProfileSerializer
 )
+from .permissions import IsAdminUser
+from movies.models import Movie
+from bookings.models import Booking
 
 
 class RegisterView(generics.CreateAPIView):
@@ -147,33 +153,31 @@ def login_view(request):
     """
     API endpoint for user login.
     
-    Authenticates user and returns token with profile information.
+    Authenticates user and returns token with profile information including role.
     """
     serializer = UserLoginSerializer(data=request.data)
     if serializer.is_valid():
-        user = serializer.validated_data['user']
+        validated_data = serializer.validated_data
+        user = validated_data['user']
         
-        # Create JWT tokens
-        refresh = RefreshToken.for_user(user)
-        access_token = refresh.access_token
+        # Ensure user profile exists
+        user_profile, created = UserProfile.objects.get_or_create(user=user)
         
-        # Ensure customer profile exists
-        customer, created = Customer.objects.get_or_create(
-            user=user,
-            defaults={'phone_number': ''}
-        )
+        # Ensure customer profile exists for non-admin users
+        if user.role == 'customer':
+            customer, created = Customer.objects.get_or_create(
+                user=user,
+                defaults={'phone_number': ''}
+            )
+            customer_data = CustomerSerializer(customer).data
+        else:
+            customer_data = None
         
         return Response({
-            'user': {
-                'id': user.id,
-                'username': user.username,
-                'email': user.email,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-            },
-            'access_token': str(access_token),
-            'refresh_token': str(refresh),
-            'customer_profile': CustomerSerializer(customer).data
+            'user': validated_data['user_info'],
+            'access_token': validated_data['tokens']['access'],
+            'refresh_token': validated_data['tokens']['refresh'],
+            'customer_profile': customer_data
         })
     
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
@@ -314,3 +318,195 @@ class CustomerProfileView(generics.RetrieveUpdateAPIView):
     
     def patch(self, request, *args, **kwargs):
         return super().patch(request, *args, **kwargs)
+
+
+# Admin Dashboard Views
+
+class AdminDashboardView(APIView):
+    """
+    Admin dashboard API endpoint providing system statistics and overview.
+    
+    Returns summary statistics for administrators.
+    """
+    permission_classes = [IsAdminUser]
+    
+    @swagger_auto_schema(
+        operation_summary="Get admin dashboard statistics",
+        operation_description="""
+        Get overview statistics for admin dashboard.
+        
+        **Admin Access Required**
+        Only users with admin role can access this endpoint.
+        """,
+        responses={
+            200: openapi.Response(
+                description="Dashboard statistics retrieved successfully",
+                examples={
+                    "application/json": {
+                        "total_users": 150,
+                        "total_customers": 140,
+                        "total_admins": 10,
+                        "total_movies": 25,
+                        "active_movies": 20,
+                        "total_bookings": 450,
+                        "recent_registrations": 12
+                    }
+                }
+            ),
+            401: openapi.Response(description="Authentication required"),
+            403: openapi.Response(description="Admin access required")
+        },
+        tags=['Admin Dashboard']
+    )
+    def get(self, request):
+        """Get dashboard statistics for admin users."""
+        try:
+            # User statistics
+            total_users = User.objects.count()
+            
+            # Count users by role using UserProfile
+            customer_profiles = UserProfile.objects.filter(role='customer').count()
+            admin_profiles = UserProfile.objects.filter(role='admin').count()
+            
+            # Movie statistics  
+            total_movies = Movie.objects.count()
+            active_movies = Movie.objects.filter(is_active=True).count()
+            
+            # Booking statistics
+            try:
+                total_bookings = Booking.objects.count()
+            except:
+                total_bookings = 0
+            
+            # Recent registrations (last 7 days)
+            from django.utils import timezone
+            from datetime import timedelta
+            week_ago = timezone.now() - timedelta(days=7)
+            recent_registrations = User.objects.filter(date_joined__gte=week_ago).count()
+            
+            return Response({
+                'total_users': total_users,
+                'total_customers': customer_profiles,
+                'total_admins': admin_profiles,
+                'total_movies': total_movies,
+                'active_movies': active_movies,
+                'total_bookings': total_bookings,
+                'recent_registrations': recent_registrations
+            })
+        except Exception as e:
+            import traceback
+            print(f"Dashboard error: {str(e)}")
+            print(traceback.format_exc())
+            return Response(
+                {'error': f'Failed to retrieve dashboard statistics: {str(e)}'}, 
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class AdminUsersListView(generics.ListAPIView):
+    """
+    Admin endpoint to list all users with filtering and search capabilities.
+    """
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAdminUser]
+    
+    def get_queryset(self):
+        """Get all users with optional filtering."""
+        queryset = User.objects.all().select_related().prefetch_related('customer_profile')
+        
+        # Filter by role
+        role = self.request.query_params.get('role')
+        if role:
+            queryset = queryset.filter(role=role)
+        
+        # Search by username, email, or name
+        search = self.request.query_params.get('search')
+        if search:
+            queryset = queryset.filter(
+                Q(username__icontains=search) |
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search)
+            )
+        
+        return queryset.order_by('-date_joined')
+    
+    @swagger_auto_schema(
+        operation_summary="List all users (Admin only)",
+        operation_description="""
+        Get paginated list of all users in the system.
+        
+        **Admin Access Required**
+        
+        **Query Parameters:**
+        - `role`: Filter by user role (customer, admin)
+        - `search`: Search by username, email, or name
+        """,
+        manual_parameters=[
+            openapi.Parameter('role', openapi.IN_QUERY, description="Filter by role", type=openapi.TYPE_STRING),
+            openapi.Parameter('search', openapi.IN_QUERY, description="Search users", type=openapi.TYPE_STRING),
+        ],
+        responses={
+            200: openapi.Response(description="Users list retrieved successfully"),
+            401: openapi.Response(description="Authentication required"),
+            403: openapi.Response(description="Admin access required")
+        },
+        tags=['Admin Dashboard']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+
+
+class AdminUserDetailView(generics.RetrieveUpdateDestroyAPIView):
+    """
+    Admin endpoint to manage individual user accounts.
+    """
+    serializer_class = UserProfileSerializer
+    permission_classes = [IsAdminUser]
+    queryset = User.objects.all().select_related().prefetch_related('customer_profile')
+    
+    @swagger_auto_schema(
+        operation_summary="Get user details (Admin only)",
+        operation_description="Retrieve detailed information for a specific user.",
+        responses={
+            200: openapi.Response(description="User details retrieved successfully"),
+            404: openapi.Response(description="User not found"),
+            401: openapi.Response(description="Authentication required"),
+            403: openapi.Response(description="Admin access required")
+        },
+        tags=['Admin Dashboard']
+    )
+    def get(self, request, *args, **kwargs):
+        return super().get(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_summary="Update user (Admin only)",
+        operation_description="Update user information (admin can modify any user).",
+        responses={
+            200: openapi.Response(description="User updated successfully"),
+            400: openapi.Response(description="Validation errors"),
+            404: openapi.Response(description="User not found"),
+            401: openapi.Response(description="Authentication required"),
+            403: openapi.Response(description="Admin access required")
+        },
+        tags=['Admin Dashboard']
+    )
+    def put(self, request, *args, **kwargs):
+        return super().put(request, *args, **kwargs)
+    
+    def patch(self, request, *args, **kwargs):
+        return super().patch(request, *args, **kwargs)
+    
+    @swagger_auto_schema(
+        operation_summary="Delete user (Admin only)",
+        operation_description="Delete a user account (use with caution).",
+        responses={
+            204: openapi.Response(description="User deleted successfully"),
+            404: openapi.Response(description="User not found"),
+            401: openapi.Response(description="Authentication required"),
+            403: openapi.Response(description="Admin access required")
+        },
+        tags=['Admin Dashboard']
+    )
+    def delete(self, request, *args, **kwargs):
+        return super().delete(request, *args, **kwargs)
