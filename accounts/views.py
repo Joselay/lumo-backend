@@ -366,7 +366,7 @@ class AdminDashboardView(APIView):
             
             # Count users by role using UserProfile
             customer_profiles = UserProfile.objects.filter(role='customer').count()
-            admin_profiles = UserProfile.objects.filter(role='admin').count()
+            admin_profiles = User.objects.filter(is_superuser=True, is_staff=True).count()
             
             # Movie statistics  
             total_movies = Movie.objects.count()

@@ -26,7 +26,7 @@ class UserProfile(models.Model):
     @property
     def is_admin(self):
         """Check if user has admin privileges."""
-        return self.role == 'admin'
+        return self.user.is_superuser and self.user.is_staff
     
     def __str__(self):
         return f"{self.user.username} ({self.role})"
@@ -37,10 +37,7 @@ class UserProfile(models.Model):
 
 # Add is_admin property to User model
 def user_is_admin(self):
-    try:
-        return self.user_profile.is_admin
-    except UserProfile.DoesNotExist:
-        return False
+    return self.is_superuser and self.is_staff
 
 def user_role(self):
     try:

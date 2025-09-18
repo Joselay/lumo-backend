@@ -12,9 +12,10 @@ class IsAdminUser(BasePermission):
         Check if the authenticated user has admin role.
         """
         return (
-            request.user 
-            and request.user.is_authenticated 
-            and request.user.role == 'admin'
+            request.user
+            and request.user.is_authenticated
+            and request.user.is_superuser
+            and request.user.is_staff
         )
 
 
@@ -37,4 +38,4 @@ class IsAdminOrReadOnly(BasePermission):
             return True
             
         # Write permissions only for admin users
-        return request.user.role == 'admin'
+        return request.user.is_superuser and request.user.is_staff
