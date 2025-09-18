@@ -115,7 +115,7 @@ class CustomerSerializer(serializers.ModelSerializer):
         model = Customer
         fields = [
             'id', 'username', 'full_name', 'email', 'phone_number',
-            'date_of_birth', 'preferred_language', 'receive_marketing_emails',
+            'date_of_birth', 'preferred_language',
             'receive_booking_notifications', 'loyalty_points', 'created_at'
         ]
         read_only_fields = ['id', 'loyalty_points', 'created_at']
@@ -135,7 +135,7 @@ class CustomerUpdateSerializer(serializers.ModelSerializer):
         model = Customer
         fields = [
             'first_name', 'last_name', 'email', 'phone_number',
-            'date_of_birth', 'preferred_language', 'receive_marketing_emails',
+            'date_of_birth', 'preferred_language',
             'receive_booking_notifications'
         ]
 

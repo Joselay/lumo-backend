@@ -44,7 +44,7 @@ class CustomUserAdmin(UserAdmin):
 class CustomerAdmin(admin.ModelAdmin):
     """Admin interface for Customer model."""
     list_display = ('full_name', 'email', 'phone_number', 'loyalty_points', 'preferred_language', 'created_at')
-    list_filter = ('preferred_language', 'receive_marketing_emails', 'receive_booking_notifications', 'created_at')
+    list_filter = ('preferred_language', 'receive_booking_notifications', 'created_at')
     search_fields = ('user__username', 'user__email', 'user__first_name', 'user__last_name', 'phone_number')
     readonly_fields = ('id', 'created_at', 'updated_at')
     
@@ -56,7 +56,7 @@ class CustomerAdmin(admin.ModelAdmin):
             'fields': ('phone_number', 'date_of_birth')
         }),
         ('Preferences', {
-            'fields': ('preferred_language', 'receive_marketing_emails', 'receive_booking_notifications')
+            'fields': ('preferred_language', 'receive_booking_notifications')
         }),
         ('Loyalty Program', {
             'fields': ('loyalty_points',)

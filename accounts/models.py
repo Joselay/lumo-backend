@@ -81,10 +81,6 @@ class Customer(models.Model):
         default='en',
         help_text="Customer's preferred language for communications"
     )
-    receive_marketing_emails = models.BooleanField(
-        default=False,
-        help_text="Whether customer wants to receive marketing emails"
-    )
     receive_booking_notifications = models.BooleanField(
         default=True,
         help_text="Whether customer wants to receive booking confirmation emails"
