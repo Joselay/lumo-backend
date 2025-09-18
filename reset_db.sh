@@ -29,8 +29,8 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATA
 echo "🔄 Running Django migrations..."
 python manage.py migrate
 
-echo "🎭 Syncing movie data from TMDB..."
-python manage.py sync_tmdb_movies
+echo "🎭 Syncing movie data from TMDB (10 movies)..."
+python manage.py sync_tmdb_movies --pages 1
 
 echo "✅ Database reset and sync completed successfully!"
 echo "🚀 You can now start the server with: python manage.py runserver"
