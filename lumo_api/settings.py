@@ -14,23 +14,16 @@ from pathlib import Path
 from datetime import timedelta
 from decouple import config
 
-# Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/4.2/howto/deployment/checklist/
-
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-m+xia!gud6_m#2ktg_d4m)q**)=%h_==98ssiu_)kwmig=qg_7')
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=True, cast=bool)
 
 ALLOWED_HOSTS = config('ALLOWED_HOSTS', default='', cast=lambda v: [s.strip() for s in v.split(',') if s.strip()])
 
 
-# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -44,6 +37,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt.token_blacklist',
     'drf_yasg',
     'django_filters',
+    'django_crontab',
     'movies',
     'accounts',
     'bookings',
@@ -166,7 +160,6 @@ SIMPLE_JWT = {
     'JTI_CLAIM': 'jti',
 }
 
-# Swagger settings
 SWAGGER_SETTINGS = {
     'SECURITY_DEFINITIONS': {
         'Bearer': {
@@ -197,7 +190,6 @@ SWAGGER_SETTINGS = {
     'REFETCH_SCHEMA_ON_LOGOUT': True,
 }
 
-# Redoc settings  
 REDOC_SETTINGS = {
     'LAZY_RENDERING': False,
     'HIDE_HOSTNAME': False,
@@ -205,9 +197,14 @@ REDOC_SETTINGS = {
     'PATH_IN_MIDDLE': True,
 }
 
-# OpenRouter AI Configuration
 OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
 OPENROUTER_BASE_URL = config('OPENROUTER_BASE_URL', default='https://openrouter.ai/api/v1')
 
-# The Movie Database (TMDB) API Configuration
 TMDB_API_KEY = config('TMDB_API_KEY', default='')
+
+CRONJOBS = [
+    ('0 2 * * *', 'django.core.management.call_command', ['sync_tmdb_movies_cron', '--pages=10']),
+]
+
+CRONTAB_LOCK_JOBS = True  
+CRONTAB_COMMAND_SUFFIX = '2>&1'  
