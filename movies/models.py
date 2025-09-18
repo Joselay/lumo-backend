@@ -45,6 +45,21 @@ class Genre(models.Model):
         return self.name
 
 
+class MovieGenre(models.Model):
+    """Through model for Movie-Genre many-to-many relationship with UUID primary key."""
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    movie = models.ForeignKey('Movie', on_delete=models.CASCADE)
+    genre = models.ForeignKey(Genre, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ['movie', 'genre']
+        ordering = ['movie__title', 'genre__name']
+
+    def __str__(self):
+        return f"{self.movie.title} - {self.genre.name}"
+
+
 class Movie(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     title = models.CharField(max_length=200)
@@ -52,15 +67,15 @@ class Movie(models.Model):
     duration = models.PositiveIntegerField(help_text="Duration in minutes")
     release_date = models.DateField()
     rating = models.DecimalField(
-        max_digits=3, 
-        decimal_places=1, 
+        max_digits=3,
+        decimal_places=1,
         validators=[MinValueValidator(0.0), MaxValueValidator(10.0)],
         null=True,
         blank=True
     )
     poster_image = models.URLField(blank=True, null=True)
     trailer_url = models.URLField(blank=True, null=True)
-    genres = models.ManyToManyField(Genre, related_name='movies')
+    genres = models.ManyToManyField(Genre, through='MovieGenre', related_name='movies')
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
