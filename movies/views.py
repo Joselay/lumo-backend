@@ -47,11 +47,11 @@ class GenreListView(generics.ListAPIView):
                         "next": None,
                         "previous": None,
                         "results": [
-                            {"id": 1, "name": "Action"},
-                            {"id": 2, "name": "Comedy"},
-                            {"id": 3, "name": "Drama"},
-                            {"id": 4, "name": "Horror"},
-                            {"id": 5, "name": "Sci-Fi"}
+                            {"id": "323e4567-e89b-12d3-a456-426614174000", "name": "Action"},
+                            {"id": "323e4567-e89b-12d3-a456-426614174001", "name": "Comedy"},
+                            {"id": "323e4567-e89b-12d3-a456-426614174002", "name": "Drama"},
+                            {"id": "323e4567-e89b-12d3-a456-426614174003", "name": "Horror"},
+                            {"id": "323e4567-e89b-12d3-a456-426614174004", "name": "Sci-Fi"}
                         ]
                     }
                 }
@@ -91,14 +91,14 @@ class MovieListView(generics.ListAPIView):
         - **Pagination:** Results are paginated (20 per page)
         
         **Query Parameters:**
-        - `genres`: Filter by genre ID (can be used multiple times)
+        - `genres`: Filter by genre UUID (can be used multiple times)
         - `release_date`: Filter by exact release date (YYYY-MM-DD)
         - `search`: Search in title and description
         - `ordering`: Sort results (`release_date`, `-release_date`, `rating`, `-rating`, `title`, `-title`)
         - `page`: Page number for pagination
-        
+
         **Examples:**
-        - `/api/v1/movies/?genres=1&genres=3` - Movies with Action OR Drama genres
+        - `/api/v1/movies/?genres=123e4567-e89b-12d3-a456-426614174000&genres=223e4567-e89b-12d3-a456-426614174001` - Movies with specific genres
         - `/api/v1/movies/?search=marvel` - Search for "marvel" in title/description
         - `/api/v1/movies/?ordering=-rating` - Sort by highest rating first
         - `/api/v1/movies/?release_date=2024-01-15` - Movies released on specific date
@@ -107,8 +107,9 @@ class MovieListView(generics.ListAPIView):
             openapi.Parameter(
                 'genres',
                 openapi.IN_QUERY,
-                description="Filter by genre ID (multiple values allowed)",
-                type=openapi.TYPE_INTEGER,
+                description="Filter by genre UUID (multiple values allowed)",
+                type=openapi.TYPE_STRING,
+                format='uuid',
                 collectionFormat='multi'
             ),
             openapi.Parameter(
@@ -149,7 +150,7 @@ class MovieListView(generics.ListAPIView):
                         "previous": None,
                         "results": [
                             {
-                                "id": 1,
+                                "id": "123e4567-e89b-12d3-a456-426614174000",
                                 "title": "Avengers: Endgame",
                                 "description": "The epic conclusion to the Infinity Saga...",
                                 "duration": 181,
@@ -158,8 +159,8 @@ class MovieListView(generics.ListAPIView):
                                 "rating": "8.4",
                                 "poster_image": "https://example.com/posters/avengers-endgame.jpg",
                                 "genres": [
-                                    {"id": 1, "name": "Action"},
-                                    {"id": 5, "name": "Sci-Fi"}
+                                    {"id": "323e4567-e89b-12d3-a456-426614174000", "name": "Action"},
+                                    {"id": "423e4567-e89b-12d3-a456-426614174000", "name": "Sci-Fi"}
                                 ]
                             }
                         ]
@@ -203,7 +204,7 @@ class MovieDetailView(generics.RetrieveAPIView):
                 schema=MovieDetailSerializer(),
                 examples={
                     "application/json": {
-                        "id": 1,
+                        "id": "123e4567-e89b-12d3-a456-426614174000",
                         "title": "Avengers: Endgame",
                         "description": "The epic conclusion to the Infinity Saga that will forever change the Marvel Cinematic Universe...",
                         "duration": 181,
@@ -213,8 +214,8 @@ class MovieDetailView(generics.RetrieveAPIView):
                         "poster_image": "https://example.com/posters/avengers-endgame.jpg",
                         "trailer_url": "https://youtube.com/watch?v=TcMBFSGVi1c",
                         "genres": [
-                            {"id": 1, "name": "Action"},
-                            {"id": 5, "name": "Sci-Fi"}
+                            {"id": "323e4567-e89b-12d3-a456-426614174000", "name": "Action"},
+                            {"id": "423e4567-e89b-12d3-a456-426614174000", "name": "Sci-Fi"}
                         ],
                         "created_at": "2024-01-15T10:30:00Z",
                         "updated_at": "2024-01-20T14:45:00Z"
