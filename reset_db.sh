@@ -29,7 +29,20 @@ PGPASSWORD=$DB_PASSWORD psql -h $DB_HOST -p $DB_PORT -U $DB_USER -c "CREATE DATA
 echo "🔄 Running Django migrations..."
 python manage.py migrate
 
-echo "🎭 Syncing movie data from TMDB (10 movies)..."
+echo "👤 Creating admin superuser..."
+python manage.py shell -c "
+from django.contrib.auth import get_user_model
+User = get_user_model()
+User.objects.create_superuser(
+    email='admin@lumo.com',
+    password='admin123',
+    first_name='Admin',
+    last_name='Lumo'
+)
+print('Admin superuser created successfully')
+"
+
+echo "🎭 Syncing movie data from TMDB (20 movies)..."
 python manage.py sync_tmdb_movies --pages 1
 
 echo "✅ Database reset and sync completed successfully!"
