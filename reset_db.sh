@@ -34,6 +34,7 @@ python manage.py shell -c "
 from django.contrib.auth import get_user_model
 User = get_user_model()
 User.objects.create_superuser(
+    username='admin',
     email='admin@lumo.com',
     password='admin123',
     first_name='Admin',
