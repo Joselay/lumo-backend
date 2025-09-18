@@ -208,3 +208,6 @@ REDOC_SETTINGS = {
 # OpenRouter AI Configuration
 OPENROUTER_API_KEY = config('OPENROUTER_API_KEY', default='')
 OPENROUTER_BASE_URL = config('OPENROUTER_BASE_URL', default='https://openrouter.ai/api/v1')
+
+# The Movie Database (TMDB) API Configuration
+TMDB_API_KEY = config('TMDB_API_KEY', default='')
