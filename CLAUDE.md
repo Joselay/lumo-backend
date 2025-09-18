@@ -10,8 +10,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `python manage.py migrate` - Apply database migrations
 - `python manage.py collectstatic` - Collect static files for production
 - `python manage.py createsuperuser` - Create admin user
-- `python manage.py populate_sample_data` - Populate database with sample movies and genres
-- `python manage.py populate_sample_data --clear` - Clear existing data and populate with samples
+- `python manage.py sync_tmdb_movies` - Sync movies from TMDB API
+- `python manage.py sync_tmdb_movies_cron` - Run TMDB sync with enhanced logging for cron jobs
 
 ### Database Setup
 - Ensure PostgreSQL is running locally
