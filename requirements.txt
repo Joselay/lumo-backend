@@ -8,3 +8,4 @@ django-filter==23.5
 openai==1.54.3
 django-crontab==0.7.1
 requests==2.31.0
+django-cors-headers==4.3.1

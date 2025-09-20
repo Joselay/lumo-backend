@@ -32,6 +32,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'rest_framework_simplejwt',
     'rest_framework_simplejwt.token_blacklist',
@@ -45,6 +46,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -206,5 +208,10 @@ CRONJOBS = [
     ('0 2 * * *', 'django.core.management.call_command', ['sync_tmdb_movies_cron', '--pages=10']),
 ]
 
-CRONTAB_LOCK_JOBS = True  
-CRONTAB_COMMAND_SUFFIX = '2>&1'  
+CRONTAB_LOCK_JOBS = True
+CRONTAB_COMMAND_SUFFIX = '2>&1'
+
+# CORS settings - Allow everything for development
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_HEADERS = True  
